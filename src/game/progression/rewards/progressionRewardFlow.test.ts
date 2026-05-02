@@ -3,7 +3,9 @@ import {
   beginProgressionReward,
   chooseProgressionReward,
   ensureProgressionRewardState,
+  rerollProgressionReward,
 } from "./progressionRewardFlow";
+import { equipRing } from "../rings/ringState";
 
 function stubWorld(seed = 1): any {
   let state = seed >>> 0;
@@ -31,6 +33,15 @@ function stubWorld(seed = 1): any {
     critChanceBonus: 0,
     items: [],
   };
+}
+
+function sequenceWorld(values: number[]): any {
+  const world = stubWorld();
+  const remaining = [...values];
+  world.rng = {
+    next: () => remaining.shift() ?? 0,
+  };
+  return world;
 }
 
 describe("progressionRewardFlow", () => {
@@ -74,5 +85,49 @@ describe("progressionRewardFlow", () => {
     expect(addFingerOption).toBeTruthy();
     chooseProgressionReward(world, addFingerOption!.id);
     expect(world.progression.hands.LEFT.slots).toHaveLength(5);
+  });
+
+  test("Selective Hand gives one floor-completion ring reward reroll", () => {
+    const world = sequenceWorld([
+      0, 0,
+      0.010001, 0,
+      0.060001, 0,
+      0.310001, 0,
+      0.310001, 0,
+      0.310001, 0,
+    ]);
+    equipRing(world, "RING_UTILITY_SELECTIVE_HAND", "LEFT:0");
+
+    beginProgressionReward(world, "RING", "FLOOR_COMPLETION", 3);
+    const state = ensureProgressionRewardState(world);
+    const beforeIds = state.options.map((option) => option.id);
+    const beforeSeq = state.renderSeq;
+
+    expect(state.rerollsRemaining).toBe(1);
+    expect(rerollProgressionReward(world)).toBe(true);
+    expect(state.rerollsRemaining).toBe(0);
+    expect(state.renderSeq).toBeGreaterThan(beforeSeq);
+    expect(state.options.map((option) => option.id)).not.toEqual(beforeIds);
+    expect(rerollProgressionReward(world)).toBe(false);
+  });
+
+  test("Selective Hand does not add rerolls to non-ring or non-floor rewards", () => {
+    const tokenWorld = stubWorld();
+    equipRing(tokenWorld, "RING_UTILITY_SELECTIVE_HAND", "LEFT:0");
+    beginProgressionReward(tokenWorld, "RING_MODIFIER_TOKEN", "FLOOR_COMPLETION", 3);
+    expect(ensureProgressionRewardState(tokenWorld).rerollsRemaining).toBe(0);
+    expect(rerollProgressionReward(tokenWorld)).toBe(false);
+
+    const handWorld = stubWorld();
+    equipRing(handWorld, "RING_UTILITY_SELECTIVE_HAND", "LEFT:0");
+    beginProgressionReward(handWorld, "HAND_EFFECT", "FLOOR_COMPLETION", 3);
+    expect(ensureProgressionRewardState(handWorld).rerollsRemaining).toBe(0);
+    expect(rerollProgressionReward(handWorld)).toBe(false);
+
+    const sideObjectiveWorld = stubWorld();
+    equipRing(sideObjectiveWorld, "RING_UTILITY_SELECTIVE_HAND", "LEFT:0");
+    beginProgressionReward(sideObjectiveWorld, "RING", "SIDE_OBJECTIVE", 3);
+    expect(ensureProgressionRewardState(sideObjectiveWorld).rerollsRemaining).toBe(0);
+    expect(rerollProgressionReward(sideObjectiveWorld)).toBe(false);
   });
 });

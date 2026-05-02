@@ -8,6 +8,11 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
+import {
+  applyNonPhysicalHitDamageSuppression,
+  applyPhysicalHitDamageIncreased,
+  collectWorldCombatRules,
+} from "../../progression/effects/combatRules";
 import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import type { DamageMeta } from "../../events";
 import {
@@ -130,6 +135,7 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
 
   const dotStats = resolveDotStats({ statMods: collectWorldStatMods(w) });
   const dotScale = Math.max(0, Math.max(0.0001, dotStats.tickRateMult));
+  const combatRules = collectWorldCombatRules(w);
 
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
@@ -138,6 +144,14 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
     let finalPhys = w.playerBeamDpsPhys * dtTick * dotScale;
     let finalFire = w.playerBeamDpsFire * dtTick * dotScale;
     let finalChaos = w.playerBeamDpsChaos * dtTick * dotScale;
+    const scaled = applyPhysicalHitDamageIncreased(
+      { physical: finalPhys, fire: finalFire, chaos: finalChaos },
+      combatRules,
+    );
+    const suppressed = applyNonPhysicalHitDamageSuppression(scaled, combatRules);
+    finalPhys = suppressed.physical;
+    finalFire = suppressed.fire;
+    finalChaos = suppressed.chaos;
     const damage = finalPhys + finalFire + finalChaos;
     if (damage <= 0) continue;
 

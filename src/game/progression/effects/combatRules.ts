@@ -3,7 +3,7 @@
 // @doc      docs/canonical/ring_progression_system.md
 // @agents   no trigger action execution or weapon stat resolution; see triggeredEffects.ts and combatStatsResolver.ts
 
-import { collectWorldRingRuntimeEffects } from "../rings/ringEffects";
+import { collectWorldRingFamilyCounts, collectWorldRingRuntimeEffects } from "../rings/ringEffects";
 import type {
   CombatRuleDef,
   RuntimeEffect,
@@ -29,6 +29,12 @@ export type CombatRulesSnapshot = {
     basePushPx: number;
     bonusPushPx: number;
   } | null;
+  noPierceNearbyHitDamageIncreased: {
+    rangePx: number;
+    increased: number;
+  } | null;
+  physicalHitDamageIncreased: number;
+  suppressNonPhysicalHitDamage: boolean;
   critRollsTwice: boolean;
   triggeredHitsCanApplyDots: boolean;
   convertAllHitDamageToChaos: boolean;
@@ -70,6 +76,16 @@ export function scaleCombatRule(
         basePushPx: scaleValue(rule.basePushPx, increasedEffectScalar),
         bonusPushPx: scaleValue(rule.bonusPushPx, increasedEffectScalar),
       };
+    case "NO_PIERCE_NEARBY_HIT_DAMAGE_INCREASED":
+      return {
+        ...rule,
+        rangePx: scaleValue(rule.rangePx, increasedEffectScalar),
+        increased: scaleValue(rule.increased, increasedEffectScalar),
+      };
+    case "PHYSICAL_HIT_DAMAGE_INCREASED_NON_PHYSICAL_SUPPRESSED":
+      return { ...rule, increased: scaleValue(rule.increased, increasedEffectScalar) };
+    case "PHYSICAL_HIT_DAMAGE_INCREASED_PER_EQUIPPED_FAMILY_RING":
+      return { ...rule, increasedPerRing: scaleValue(rule.increasedPerRing, increasedEffectScalar) };
     case "POISON_EXTRA_STACK_CHANCE":
       return { ...rule, chance: clamp01(scaleValue(rule.chance, increasedEffectScalar)) };
     case "TRIGGER_PROC_CHANCE_INCREASED":
@@ -98,6 +114,9 @@ export function collectCombatRulesFromRuntimeEffects(
 
 export function buildCombatRulesSnapshot(
   rules: readonly CombatRuleDef[] = [],
+  args: {
+    equippedRingFamilyCounts?: Partial<Record<string, number>>;
+  } = {},
 ): CombatRulesSnapshot {
   const snapshot: CombatRulesSnapshot = {
     everyNthShotCrits: null,
@@ -106,6 +125,9 @@ export function buildCombatRulesSnapshot(
     moreDamageToBurningTargets: 0,
     pointBlankDamageFalloff: null,
     pointBlankCloseHitKnockback: null,
+    noPierceNearbyHitDamageIncreased: null,
+    physicalHitDamageIncreased: 0,
+    suppressNonPhysicalHitDamage: false,
     critRollsTwice: false,
     triggeredHitsCanApplyDots: false,
     convertAllHitDamageToChaos: false,
@@ -162,6 +184,32 @@ export function buildCombatRulesSnapshot(
           snapshot.pointBlankCloseHitKnockback.bonusPushPx += Math.max(0, rule.bonusPushPx);
         }
         break;
+      case "NO_PIERCE_NEARBY_HIT_DAMAGE_INCREASED":
+        if (!snapshot.noPierceNearbyHitDamageIncreased) {
+          snapshot.noPierceNearbyHitDamageIncreased = {
+            rangePx: Math.max(0, rule.rangePx),
+            increased: Math.max(0, rule.increased),
+          };
+        } else {
+          snapshot.noPierceNearbyHitDamageIncreased.rangePx = Math.max(
+            snapshot.noPierceNearbyHitDamageIncreased.rangePx,
+            Math.max(0, rule.rangePx),
+          );
+          snapshot.noPierceNearbyHitDamageIncreased.increased += Math.max(0, rule.increased);
+        }
+        break;
+      case "PHYSICAL_HIT_DAMAGE_INCREASED_NON_PHYSICAL_SUPPRESSED":
+        snapshot.physicalHitDamageIncreased += Math.max(0, rule.increased);
+        snapshot.suppressNonPhysicalHitDamage = true;
+        break;
+      case "PHYSICAL_HIT_DAMAGE_INCREASED_PER_EQUIPPED_FAMILY_RING": {
+        const equippedCount = Math.max(
+          0,
+          Math.floor(args.equippedRingFamilyCounts?.[rule.familyId] ?? 0),
+        );
+        snapshot.physicalHitDamageIncreased += equippedCount * Math.max(0, rule.increasedPerRing);
+        break;
+      }
       case "CRIT_ROLLS_TWICE":
         snapshot.critRollsTwice = true;
         break;
@@ -194,6 +242,7 @@ export function buildCombatRulesSnapshot(
 export function collectWorldCombatRules(world: any): CombatRulesSnapshot {
   return buildCombatRulesSnapshot(
     collectCombatRulesFromRuntimeEffects(collectWorldRingRuntimeEffects(world)),
+    { equippedRingFamilyCounts: collectWorldRingFamilyCounts(world) },
   );
 }
 
@@ -215,4 +264,28 @@ export function scaleTriggerProcChance(
   rules: CombatRulesSnapshot,
 ): number {
   return clamp01(Math.max(0, baseChance) * (1 + Math.max(0, rules.triggerProcChanceIncreased)));
+}
+
+export function applyPhysicalHitDamageIncreased(
+  damage: TypedHitDamage,
+  rules: CombatRulesSnapshot,
+): TypedHitDamage {
+  const scale = 1 + Math.max(0, rules.physicalHitDamageIncreased);
+  return {
+    physical: Math.max(0, damage.physical) * scale,
+    fire: Math.max(0, damage.fire),
+    chaos: Math.max(0, damage.chaos),
+  };
+}
+
+export function applyNonPhysicalHitDamageSuppression(
+  damage: TypedHitDamage,
+  rules: CombatRulesSnapshot,
+): TypedHitDamage {
+  if (!rules.suppressNonPhysicalHitDamage) return damage;
+  return {
+    physical: Math.max(0, damage.physical),
+    fire: 0,
+    chaos: 0,
+  };
 }

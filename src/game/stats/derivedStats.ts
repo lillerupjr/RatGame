@@ -53,24 +53,26 @@ export function recomputeDerivedStats(w: World) {
   const itemDamageMoreFactor = Math.max(0, finite(w.dmgMult, 1));
   const itemAttackSpeedMoreFactor = Math.max(0, finite(w.fireRateMult, 1));
   const itemMoveSpeedFlat = finite(w.pSpeed, w.baseMoveSpeed) - w.baseMoveSpeed;
-  const mods = collectWorldStatMods(w);
+  const preLifeMods = collectWorldStatMods(w);
 
   w.dmgMult = 1;
   w.fireRateMult = 1;
   w.pSpeed = w.baseMoveSpeed;
 
-  const lifeAdd = sumMods(mods, STAT_KEYS.LIFE_ADD, "add");
+  const lifeAdd = sumMods(preLifeMods, STAT_KEYS.LIFE_ADD, "add");
   w.playerHpMax = resolveScalarPipeline({
     base: finite(w.basePlayerHpMax, 0),
     flatAdds: present(Math.max(0, lifeAdd)),
     flatSubs: present(Math.max(0, -lifeAdd)),
-    increased: present(sumMods(mods, STAT_KEYS.LIFE_INCREASED, "increased")),
-    decreased: present(sumMods(mods, STAT_KEYS.LIFE_DECREASED, "decreased")),
-    more: present(sumMods(mods, STAT_KEYS.LIFE_MORE, "more")),
-    less: present(sumMods(mods, STAT_KEYS.LIFE_LESS, "less")),
+    increased: present(sumMods(preLifeMods, STAT_KEYS.LIFE_INCREASED, "increased")),
+    decreased: present(sumMods(preLifeMods, STAT_KEYS.LIFE_DECREASED, "decreased")),
+    more: present(sumMods(preLifeMods, STAT_KEYS.LIFE_MORE, "more")),
+    less: present(sumMods(preLifeMods, STAT_KEYS.LIFE_LESS, "less")),
     min: 1,
     rounding: "floor",
   });
+
+  const mods = collectWorldStatMods(w);
 
   w.momentumMax = Math.max(0, w.momentumMax);
   w.momentumValue = Math.max(0, Math.min(w.momentumMax, Number.isFinite(w.momentumValue) ? w.momentumValue : 0));

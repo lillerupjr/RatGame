@@ -28,6 +28,7 @@ describe("resolveWeaponStats", () => {
     expect(out.multiProjectileSpreadDeg).toBeCloseTo(3.0);
     expect(out.projectiles).toBe(1);
     expect(out.pierce).toBe(0);
+    expect(out.projectileBounces).toBe(0);
 
     expect(out.chanceToBleed).toBeCloseTo(0);
     expect(out.chanceToIgnite).toBeCloseTo(0);
@@ -174,6 +175,29 @@ describe("resolveWeaponStats", () => {
     const c2 = mkModifier("T_PROJECTILES_NEG", [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: -999 }]);
     const out2 = resolveWeaponStats(JACK_PISTOL_V1, { modifiers: [c2] });
     expect(out2.projectiles).toBe(1);
+  });
+
+  test("projectile hit damage modifiers affect projectile weapons but not beams", () => {
+    const c = mkModifier("T_PROJECTILE_DAMAGE", [
+      { key: STAT_KEYS.PROJECTILE_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 },
+      { key: STAT_KEYS.PROJECTILE_HIT_DAMAGE_LESS, op: "less", value: 0.75 },
+    ]);
+
+    const pistolOut = resolveWeaponStats(JACK_PISTOL_V1, { modifiers: [c] });
+    expect(pistolOut.baseDamage.physical).toBeCloseTo(12 * 1.1 * 0.25);
+
+    const beamOut = resolveWeaponStats(JOEY_RIFLE_V1, { modifiers: [c] });
+    expect(beamOut.baseDamage.fire).toBeCloseTo(24);
+  });
+
+  test("projectile bounces is integer floor and clamps at 0", () => {
+    const c1 = mkModifier("T_BOUNCE_FRAC", [{ key: STAT_KEYS.PROJECTILE_BOUNCE_ADD, op: "add", value: 2.9 }]);
+    const out1 = resolveWeaponStats(JACK_PISTOL_V1, { modifiers: [c1] });
+    expect(out1.projectileBounces).toBe(2);
+
+    const c2 = mkModifier("T_BOUNCE_NEG", [{ key: STAT_KEYS.PROJECTILE_BOUNCE_ADD, op: "add", value: -999 }]);
+    const out2 = resolveWeaponStats(JACK_PISTOL_V1, { modifiers: [c2] });
+    expect(out2.projectileBounces).toBe(0);
   });
 
   test("shotgun +1 projectile modifier resolves to 5 projectiles from base 4", () => {

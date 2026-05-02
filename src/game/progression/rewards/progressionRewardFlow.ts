@@ -4,6 +4,7 @@
 // @agents   no reward ticket scheduling or option UI rendering; see rewardSchedulerSystem.ts and progressionRewardMenu.ts
 
 import { recomputeDerivedStats } from "../../stats/derivedStats";
+import { collectWorldRewardRules } from "../effects/rewardRules";
 import {
   applyHandEffect,
   ensureRingProgressionState,
@@ -12,7 +13,7 @@ import {
   resolveRingEquipTargetSlotId,
 } from "../rings/ringState";
 import type { ProgressionRewardOption } from "./progressionOffers";
-import { generateProgressionOffers } from "./progressionOffers";
+import { generateProgressionRewardOffers } from "./progressionOffers";
 import type {
   ProgressionRewardFamily,
   ProgressionRewardSource,
@@ -22,6 +23,9 @@ export type ProgressionRewardState = {
   active: boolean;
   family: ProgressionRewardFamily;
   source: ProgressionRewardSource;
+  baseOptionCount: number;
+  rerollsRemaining: number;
+  renderSeq: number;
   options: ProgressionRewardOption[];
 };
 
@@ -34,10 +38,24 @@ export function ensureProgressionRewardState(world: any): ProgressionRewardState
       active: false,
       family: DEFAULT_FAMILY,
       source: DEFAULT_SOURCE,
+      baseOptionCount: 0,
+      rerollsRemaining: 0,
+      renderSeq: 0,
       options: [],
     } satisfies ProgressionRewardState;
   }
-  return world.progressionReward as ProgressionRewardState;
+
+  const state = world.progressionReward as ProgressionRewardState;
+  if (!Number.isFinite(state.baseOptionCount)) state.baseOptionCount = 0;
+  if (!Number.isFinite(state.rerollsRemaining)) state.rerollsRemaining = 0;
+  if (!Number.isFinite(state.renderSeq)) state.renderSeq = 0;
+  if (!Array.isArray(state.options)) state.options = [];
+  return state;
+}
+
+function resolveRerollCount(world: any, family: ProgressionRewardFamily, source: ProgressionRewardSource): number {
+  if (family !== "RING" || source !== "FLOOR_COMPLETION") return 0;
+  return collectWorldRewardRules(world).ringRewardRerollCount;
 }
 
 export function beginProgressionReward(
@@ -51,7 +69,10 @@ export function beginProgressionReward(
   state.active = true;
   state.family = family;
   state.source = source;
-  state.options = generateProgressionOffers(world, family, source, optionCount);
+  state.baseOptionCount = Number.isFinite(optionCount) ? Math.max(0, Math.floor(optionCount)) : 0;
+  state.rerollsRemaining = resolveRerollCount(world, family, source);
+  state.renderSeq += 1;
+  state.options = generateProgressionRewardOffers(world, family, source, state.baseOptionCount);
 }
 
 export function applyProgressionRewardOption(world: any, option: ProgressionRewardOption): void {
@@ -90,10 +111,30 @@ export function chooseProgressionReward(world: any, optionId: string): void {
   applyProgressionRewardOption(world, option);
   state.active = false;
   state.options = [];
+  state.baseOptionCount = 0;
+  state.rerollsRemaining = 0;
+  state.renderSeq += 1;
 }
 
 export function cancelProgressionReward(world: any): void {
   const state = ensureProgressionRewardState(world);
   state.active = false;
   state.options = [];
+  state.baseOptionCount = 0;
+  state.rerollsRemaining = 0;
+  state.renderSeq += 1;
+}
+
+export function rerollProgressionReward(world: any): boolean {
+  const state = ensureProgressionRewardState(world);
+  if (!state.active || state.family !== "RING" || state.source !== "FLOOR_COMPLETION") return false;
+  if (state.rerollsRemaining <= 0) return false;
+
+  const nextOptions = generateProgressionRewardOffers(world, state.family, state.source, state.baseOptionCount);
+  if (nextOptions.length <= 0) return false;
+
+  state.rerollsRemaining -= 1;
+  state.options = nextOptions;
+  state.renderSeq += 1;
+  return true;
 }

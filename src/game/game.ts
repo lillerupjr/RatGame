@@ -176,7 +176,7 @@ import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import {
   chooseProgressionReward,
   ensureProgressionRewardState,
-  cancelProgressionReward,
+  rerollProgressionReward,
 } from "./progression/rewards/progressionRewardFlow";
 import { equipRing, unequipRing, applyModifierTokenToRing } from "./progression/rings/ringState";
 import type { ModifierTokenType } from "./progression/rings/ringTypes";
@@ -197,6 +197,7 @@ import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEve
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
 import { processProgressionTriggeredEffects } from "./progression/effects/triggeredEffects";
+import { applyFloorLifecycleEffects } from "./progression/effects/floorLifecycleEffects";
 import { enemyBehaviorSystem } from "./systems/enemies/behavior";
 import { enemyActionSystem } from "./systems/enemies/actions";
 import {
@@ -846,7 +847,10 @@ export function createGame(args: CreateGameArgs) {
       if (!cleared) return false;
     }
     const committed = commitFloorClear(w);
-    if (committed) validateDelveHeatInvariant(w, "commitCurrentNodeClear");
+    if (committed) {
+      applyFloorLifecycleEffects(w, "FLOOR_COMPLETE");
+      validateDelveHeatInvariant(w, "commitCurrentNodeClear");
+    }
     return committed;
   }
 
@@ -1048,6 +1052,9 @@ export function createGame(args: CreateGameArgs) {
         // Clear reward state without applying the reward
         reward.active = false;
         reward.options = [];
+        reward.baseOptionCount = 0;
+        reward.rerollsRemaining = 0;
+        reward.renderSeq += 1;
         hideProgressionRewardMenu();
         // Open hands screen in choose-slot mode
         handsScreenChooseSlotPending = { ringDefId };
@@ -1060,6 +1067,11 @@ export function createGame(args: CreateGameArgs) {
       renderRewardMenuIfNeeded();
       if (tryAdvanceAfterObjectiveCompletion()) return;
       world.state = "RUN";
+    },
+    onReroll: () => {
+      if (rerollProgressionReward(world)) {
+        renderRewardMenuIfNeeded();
+      }
     },
   });
   const vendorRoot = document.createElement("div");
@@ -1085,7 +1097,7 @@ export function createGame(args: CreateGameArgs) {
 
   const renderRewardMenuIfNeeded = (): void => {
     const progressionReward = ensureProgressionRewardState(world);
-    const key = `${world.state}|p:${progressionReward.active ? 1 : 0}|${progressionReward.family}|${progressionReward.source}|${progressionReward.options.map((option) => option.id).join(",")}`;
+    const key = `${world.state}|p:${progressionReward.active ? 1 : 0}|${progressionReward.family}|${progressionReward.source}|b:${progressionReward.baseOptionCount}|r:${progressionReward.rerollsRemaining}|s:${progressionReward.renderSeq}|${progressionReward.options.map((option) => option.id).join(",")}`;
     if (key === lastRewardRenderKey) return;
     progressionRewardMenu.render(progressionReward.active ? progressionReward : null);
     lastRewardRenderKey = key;
@@ -2319,7 +2331,7 @@ export function createGame(args: CreateGameArgs) {
       mapId: node.runtime.mapId,
       bossId: node.runtime.bossId,
       objectiveId: node.runtime.objectiveId,
-      rewardFamily: defaultRewardFamilyForDepth(getNodeDepth(node)),
+      rewardFamily: node.rewardFamily ?? defaultRewardFamilyForDepth(getNodeDepth(node)),
       variantSeed: node.runtime.variantSeed,
       rareCount: node.runtime.rareCount,
       spawnZoneCount: node.runtime.spawnZoneCount,
@@ -3013,6 +3025,11 @@ export function createGame(args: CreateGameArgs) {
     return null;
   };
 
+  const rewardFamilyCssKey = (family: ProgressionRewardFamily): string => {
+    if (family === "RING_MODIFIER_TOKEN") return "modifier";
+    return "ring";
+  };
+
   const routeEdgeStateClass = (
     from: RouteMapVM["nodes"][number] | undefined,
     to: RouteMapVM["nodes"][number] | undefined,
@@ -3197,7 +3214,7 @@ export function createGame(args: CreateGameArgs) {
       label.textContent = node.kindLabel;
       meta.appendChild(label);
       const rewardTag = document.createElement("span");
-      rewardTag.className = "routeNodeTag routeNodeRewardTag";
+      rewardTag.className = `routeNodeTag routeNodeRewardTag routeNodeRewardTag--${rewardFamilyCssKey(node.rewardFamily)}`;
       rewardTag.textContent = node.rewardFamilyLabel;
       meta.appendChild(rewardTag);
       if (node.combatTagText) {

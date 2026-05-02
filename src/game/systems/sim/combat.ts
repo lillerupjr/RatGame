@@ -115,6 +115,7 @@ export function combatSystem(w: World, dt: number) {
       chancePoison: resolved.chanceToPoison,
       radius: 5,
       pierce: resolved.pierce,
+      bounces: resolved.projectileBounces > 0 ? resolved.projectileBounces : undefined,
       ttl: 2.2,
       maxDist: fireRangePx > 0 ? fireRangePx : undefined,
       damageMeta: weaponHitDamageMeta,

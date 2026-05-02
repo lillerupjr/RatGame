@@ -7,7 +7,7 @@ import type { RuntimeEffect, StatMod } from "../effects/effectTypes";
 import { collectStatModsFromRuntimeEffects } from "../effects/statMods";
 import { getRingDefById, getRingFamilyTalentTreeById } from "./ringContent";
 import { ensureRingProgressionState, getFingerSlot } from "./ringState";
-import type { FingerSlotId, RingProgressionState } from "./ringTypes";
+import type { FingerSlotId, RingFamilyId, RingProgressionState } from "./ringTypes";
 
 export function collectRingRuntimeEffects(state: RingProgressionState): RuntimeEffect[] {
   const effects: RuntimeEffect[] = [];
@@ -57,4 +57,22 @@ export function collectWorldRingRuntimeEffects(world: any): RuntimeEffect[] {
 
 export function collectWorldRingStatMods(world: any): StatMod[] {
   return collectStatModsFromRuntimeEffects(collectWorldRingRuntimeEffects(world));
+}
+
+export function collectRingFamilyCounts(state: RingProgressionState): Partial<Record<RingFamilyId, number>> {
+  const counts: Partial<Record<RingFamilyId, number>> = {};
+
+  for (const instance of Object.values(state.ringsByInstanceId)) {
+    const def = getRingDefById(instance.defId);
+    if (!def) continue;
+    const slot = getFingerSlot(state, instance.slotId as FingerSlotId);
+    if (slot?.ringInstanceId !== instance.instanceId) continue;
+    counts[def.familyId] = (counts[def.familyId] ?? 0) + 1;
+  }
+
+  return counts;
+}
+
+export function collectWorldRingFamilyCounts(world: any): Partial<Record<RingFamilyId, number>> {
+  return collectRingFamilyCounts(ensureRingProgressionState(world));
 }

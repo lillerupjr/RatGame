@@ -17,6 +17,7 @@ function sourceLabel(source: string): string {
 export function mountProgressionRewardMenu(args: {
   root: HTMLElement;
   onPick: (optionId: string) => void;
+  onReroll: () => void;
 }): {
   render: (state: ProgressionRewardState | null) => void;
   destroy: () => void;
@@ -50,13 +51,19 @@ export function mountProgressionRewardMenu(args: {
       sub.className = "sub";
       panel.appendChild(sub);
     }
+    let actions = panel.querySelector(".rewardActionRow") as HTMLElement | null;
+    if (!actions) {
+      actions = document.createElement("div");
+      actions.className = "rewardActionRow";
+      panel.appendChild(actions);
+    }
     let choices = panel.querySelector(".deckCardGrid") as HTMLElement | null;
     if (!choices) {
       choices = document.createElement("div");
       panel.appendChild(choices);
     }
     choices.className = "deckCardGrid";
-    return { title, sub, choices };
+    return { title, sub, actions, choices };
   };
 
   const render = (state: ProgressionRewardState | null): void => {
@@ -68,9 +75,18 @@ export function mountProgressionRewardMenu(args: {
     }
     if (!wasActive) entryShieldUntilMs = Date.now() + OVERLAY_ENTRY_SHIELD_MS;
 
-    const { title, sub, choices } = ensureStructure();
+    const { title, sub, actions, choices } = ensureStructure();
     title.textContent = `Choose a ${rewardFamilyLabel(currentState.family)} Reward`;
     sub.textContent = `Pick 1 reward (${sourceLabel(currentState.source)})`;
+    actions.innerHTML = "";
+    if (currentState.family === "RING" && currentState.rerollsRemaining > 0) {
+      const reroll = document.createElement("button");
+      reroll.type = "button";
+      reroll.className = "rewardRerollButton";
+      reroll.textContent = `Reroll (${currentState.rerollsRemaining})`;
+      tapSafe.bindActivate(reroll, () => args.onReroll());
+      actions.appendChild(reroll);
+    }
     choices.innerHTML = "";
 
     for (const option of currentState.options) {

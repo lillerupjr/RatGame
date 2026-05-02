@@ -25,6 +25,7 @@ export interface ResolvedWeaponStats {
   radiusPx: number;
   projectiles: number;
   pierce: number;
+  projectileBounces: number;
 
   // Ailment chances (0..1)
   chanceToBleed: number;
@@ -145,6 +146,7 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
   const baseProjectiles = Math.max(1, Math.floor(weapon.projectile.baseProjectiles ?? 1));
   const projectiles = Math.max(1, Math.floor(baseProjectiles + getAcc(STAT_KEYS.PROJECTILES_ADD).add));
   const pierce = Math.max(0, Math.floor(weapon.projectile.pierce + getAcc(STAT_KEYS.PIERCE_ADD).add));
+  const projectileBounces = Math.max(0, Math.floor(getAcc(STAT_KEYS.PROJECTILE_BOUNCE_ADD).add));
 
   const conv = {
     physToFire: clamp01(getAcc(STAT_KEYS.CONVERT_PHYS_TO_FIRE).add),
@@ -164,11 +166,18 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
   const damageIncreased = getAcc(STAT_KEYS.DAMAGE_INCREASED).inc;
   const damageMore = getAcc(STAT_KEYS.DAMAGE_MORE).more;
   const damageScale = (1 + damageIncreased) * damageMore;
+  const projectileDamageAcc = combineAcc(
+    getAcc(STAT_KEYS.PROJECTILE_HIT_DAMAGE_INCREASED),
+    getAcc(STAT_KEYS.PROJECTILE_HIT_DAMAGE_LESS),
+  );
+  const projectileDamageScale = (weapon.fireMode ?? "projectile") === "projectile"
+    ? Math.max(0, (1 + projectileDamageAcc.inc) * projectileDamageAcc.more * projectileDamageAcc.less)
+    : 1;
 
   const baseDamage: DamageBundle = {
-    physical: afterConv.physical * damageScale,
-    fire: afterConv.fire * damageScale,
-    chaos: afterConv.chaos * damageScale,
+    physical: afterConv.physical * damageScale * projectileDamageScale,
+    fire: afterConv.fire * damageScale * projectileDamageScale,
+    chaos: afterConv.chaos * damageScale * projectileDamageScale,
   };
 
   const chanceToBleed = clamp01((weapon.baseChanceToBleed ?? 0) + getAcc(STAT_KEYS.CHANCE_TO_BLEED_ADD).add);
@@ -187,6 +196,7 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
     radiusPx: weapon.projectile.radiusPx,
     projectiles,
     pierce,
+    projectileBounces,
     chanceToBleed,
     chanceToIgnite,
     chanceToPoison,

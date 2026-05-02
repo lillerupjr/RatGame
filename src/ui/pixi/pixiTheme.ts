@@ -144,6 +144,7 @@ export const FAMILY_COLORS: Record<string, number> = {
   ignite: 0xdd6633,
   crit: 0xdd9933,
   trigger: 0x7777cc,
+  health: 0xcc5577,
   defense: 0x6688aa,
   utility: 0x88aa66,
 };

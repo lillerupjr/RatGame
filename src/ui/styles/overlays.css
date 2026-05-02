@@ -3064,6 +3064,28 @@ html.ios-standalone-fix #ui {
   gap: 12px;
 }
 
+.rewardActionRow {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 38px;
+  margin-bottom: 10px;
+}
+
+.rewardRerollButton {
+  padding: 9px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.rewardRerollButton:hover {
+  background: var(--active-bg);
+  border-color: var(--border-strong);
+}
+
 .deckCardGrid > * {
   flex: 1 1 0;
   min-width: 0;
@@ -4531,6 +4553,16 @@ html.ios-standalone-fix #ui {
   text-transform: uppercase;
   white-space: nowrap;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+#map.routeMode .routeNodeRewardTag--ring {
+  border-color: rgba(100, 200, 255, 0.25);
+  color: rgba(150, 220, 255, 0.95);
+}
+
+#map.routeMode .routeNodeRewardTag--modifier {
+  border-color: rgba(255, 200, 100, 0.25);
+  color: rgba(255, 220, 140, 0.95);
 }
 
 #map.routeMode .routeNodeMeta {

@@ -770,6 +770,9 @@ export function createWorld(args: CreateWorldArgs): World {
       active: false,
       family: "RING",
       source: "FLOOR_COMPLETION",
+      baseOptionCount: 0,
+      rerollsRemaining: 0,
+      renderSeq: 0,
       options: [],
     },
     floorRewardBudget: {

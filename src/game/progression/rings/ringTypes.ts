@@ -16,11 +16,15 @@ export const RING_FAMILY_IDS = [
   "ignite",
   "crit",
   "trigger",
+  "health",
   "defense",
   "utility",
 ] as const;
 
 export type RingFamilyId = (typeof RING_FAMILY_IDS)[number];
+
+export const RING_TIER_IDS = ["t0", "t1", "t2", "t3"] as const;
+export type RingTier = (typeof RING_TIER_IDS)[number];
 
 export const HAND_IDS = ["LEFT", "RIGHT"] as const;
 export type HandId = (typeof HAND_IDS)[number];
@@ -36,7 +40,7 @@ export type RingDef = {
   id: string;
   name: string;
   description: string;
-  tier: 1;
+  tier: RingTier;
   familyId: RingFamilyId;
   tags: string[];
   mainEffect: EffectDef;

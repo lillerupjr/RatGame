@@ -7,13 +7,16 @@ import { PRJ_KIND } from "../../factories/projectileFactory";
 import { STAT_KEYS } from "../../combat_mods/stats/statKeys";
 import type {
   CombatRuleDef,
+  DynamicStatModifierDef,
   EffectDef,
   ModOp,
+  RewardRuleDef,
   TriggeredEffectActionDef,
 } from "../effects/effectTypes";
 import {
   HAND_EFFECT_TYPES,
   RING_FAMILY_IDS,
+  RING_TIER_IDS,
   type RingDef,
   type RingFamilyTalentTreeDef,
   type RingTalentNodeDef,
@@ -29,6 +32,7 @@ const VALID_TRIGGER_KEYS = new Set([
   "ON_MOVE",
   "OTHER",
 ]);
+const VALID_FLOOR_LIFECYCLE_TRIGGERS = new Set(["FLOOR_COMPLETE"]);
 
 export type RingContentValidationIssue = {
   path: string;
@@ -47,12 +51,16 @@ function makeEmptyTree(familyId: RingFamilyTalentTreeDef["familyId"]): RingFamil
   return { familyId, nodes: [] };
 }
 
+function isRingTier(value: unknown): boolean {
+  return typeof value === "string" && (RING_TIER_IDS as readonly string[]).includes(value);
+}
+
 export const RING_DEFS_V1: RingDef[] = [
   {
     id: "RING_STARTER_STREET_REFLEX",
     name: "Street Reflex",
     description: "On hit, 20% chance to throw an additional knife at a nearby enemy.",
-    tier: 1,
+    tier: "t2",
     familyId: "starter",
     tags: ["starter", "trigger", "projectile"],
     mainEffect: {
@@ -77,7 +85,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_STARTER_LUCKY_CHAMBER",
     name: "Lucky Chamber",
     description: "Every 5th shot is guaranteed to crit.",
-    tier: 1,
+    tier: "t2",
     familyId: "starter",
     tags: ["starter", "crit", "weapon"],
     mainEffect: {
@@ -89,7 +97,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_STARTER_CONTAMINATED_ROUNDS",
     name: "Contaminated Rounds",
     description: "Projectiles pierce poisoned enemies. Poisoned enemies take +20% damage from piercing hits.",
-    tier: 1,
+    tier: "t2",
     familyId: "starter",
     tags: ["starter", "projectile", "poison"],
     mainEffect: {
@@ -104,7 +112,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_STARTER_POINT_BLANK_CARNAGE",
     name: "Point Blank Carnage",
     description: "Deal up to +50% damage based on proximity. Very close hits knock enemies back.",
-    tier: 1,
+    tier: "t2",
     familyId: "starter",
     tags: ["starter", "damage", "close-range"],
     mainEffect: {
@@ -119,7 +127,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_STARTER_THERMAL_STARTER",
     name: "Thermal Starter",
     description: "Deal +15% damage to burning enemies.",
-    tier: 1,
+    tier: "t3",
     familyId: "starter",
     tags: ["starter", "ignite", "damage"],
     mainEffect: {
@@ -131,7 +139,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_GENERIC_DAMAGE_PERCENT_20",
     name: "20% More Damage",
     description: "20% more damage.",
-    tier: 1,
+    tier: "t3",
     familyId: "generic",
     tags: ["generic", "damage"],
     mainEffect: {
@@ -140,10 +148,22 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_GENERIC_DAMAGE_PERCENT_10",
+    name: "Small Damage Band",
+    description: "Deal 10% more damage.",
+    tier: "t3",
+    familyId: "generic",
+    tags: ["generic", "damage"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_MORE, op: "more", value: 0.1 }],
+    },
+  },
+  {
     id: "RING_GENERIC_DAMAGE_MORE_60_ATTACK_SPEED_LESS_30",
     name: "60% More Damage / 30% Less Attack Speed",
     description: "60% more damage. 30% less attack speed.",
-    tier: 1,
+    tier: "t2",
     familyId: "generic",
     tags: ["generic", "damage", "attack-speed"],
     mainEffect: {
@@ -158,7 +178,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_GENERIC_ATTACK_SPEED_MORE_60_DAMAGE_LESS_30",
     name: "60% More Attack Speed / 30% Less Damage",
     description: "60% more attack speed. 30% less damage.",
-    tier: 1,
+    tier: "t2",
     familyId: "generic",
     tags: ["generic", "damage", "attack-speed"],
     mainEffect: {
@@ -173,7 +193,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_GENERIC_DAMAGE_MORE_100_MAX_LIFE_LESS_50",
     name: "100% More Damage / 50% Less Maximum Life",
     description: "100% more damage. 50% less maximum life.",
-    tier: 1,
+    tier: "t1",
     familyId: "generic",
     tags: ["generic", "damage", "life"],
     mainEffect: {
@@ -188,7 +208,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_GENERIC_MOVE_SPEED_20",
     name: "20% More Movement Speed",
     description: "20% more movement speed.",
-    tier: 1,
+    tier: "t3",
     familyId: "generic",
     tags: ["generic", "movement"],
     mainEffect: {
@@ -197,10 +217,22 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_GENERIC_MOVE_SPEED_10",
+    name: "Quick Step",
+    description: "Gain 10% movement speed.",
+    tier: "t3",
+    familyId: "generic",
+    tags: ["generic", "movement"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.MOVE_SPEED_MORE, op: "more", value: 0.1 }],
+    },
+  },
+  {
     id: "RING_PHYSICAL_DAMAGE_PERCENT_20",
     name: "20% More Physical Damage",
     description: "20% more physical damage.",
-    tier: 1,
+    tier: "t3",
     familyId: "physical",
     tags: ["physical", "damage"],
     mainEffect: {
@@ -209,10 +241,52 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_PHYSICAL_DAMAGE_PERCENT_10",
+    name: "Bruiser's Band",
+    description: "Deal 10% more physical damage.",
+    tier: "t3",
+    familyId: "physical",
+    tags: ["physical", "damage"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.PHYSICAL_HIT_DAMAGE_MORE, op: "more", value: 0.1 }],
+    },
+  },
+  {
+    id: "RING_PHYSICAL_PURE_FORCE",
+    name: "Pure Force",
+    description: "Your physical hit damage is increased by 30%, but you deal no non-physical hit damage.",
+    tier: "t1",
+    familyId: "physical",
+    tags: ["physical", "damage", "restriction"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "PHYSICAL_HIT_DAMAGE_INCREASED_NON_PHYSICAL_SUPPRESSED", increased: 0.3 }],
+    },
+  },
+  {
+    id: "RING_PHYSICAL_DEVOTION",
+    name: "Physical Devotion",
+    description: "Deal 20% increased physical hit damage for each equipped physical-family ring.",
+    tier: "t1",
+    familyId: "physical",
+    tags: ["physical", "damage", "family"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [
+        {
+          kind: "PHYSICAL_HIT_DAMAGE_INCREASED_PER_EQUIPPED_FAMILY_RING",
+          familyId: "physical",
+          increasedPerRing: 0.2,
+        },
+      ],
+    },
+  },
+  {
     id: "RING_PROJECTILE_ADDITIONAL_PROJECTILES_1",
     name: "+1 Projectile",
     description: "You gain +1 projectile.",
-    tier: 1,
+    tier: "t1",
     familyId: "projectile",
     tags: ["projectile"],
     mainEffect: {
@@ -224,7 +298,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_PROJECTILE_GAIN_PIERCE_1",
     name: "+1 Pierce",
     description: "Your projectiles gain +1 pierce.",
-    tier: 1,
+    tier: "t2",
     familyId: "projectile",
     tags: ["projectile", "pierce"],
     mainEffect: {
@@ -233,10 +307,61 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_PROJECTILE_DAMAGE_INCREASED_10",
+    name: "Sharpened Tip",
+    description: "Projectiles deal 10% increased damage.",
+    tier: "t3",
+    familyId: "projectile",
+    tags: ["projectile", "damage"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.PROJECTILE_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }],
+    },
+  },
+  {
+    id: "RING_PROJECTILE_BOUNCE_ADD_1",
+    name: "Ricochet Rounds",
+    description: "Projectiles gain +1 bounce.",
+    tier: "t1",
+    familyId: "projectile",
+    tags: ["projectile", "bounce"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.PROJECTILE_BOUNCE_ADD, op: "add", value: 1 }],
+    },
+  },
+  {
+    id: "RING_PROJECTILE_SCATTER_SHOT",
+    name: "Scatter Shot",
+    description: "Gain +5 projectiles, but projectiles deal 75% less damage.",
+    tier: "t0",
+    familyId: "projectile",
+    tags: ["projectile", "damage"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [
+        { key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 5 },
+        { key: STAT_KEYS.PROJECTILE_HIT_DAMAGE_LESS, op: "less", value: 0.75 },
+      ],
+    },
+  },
+  {
+    id: "RING_PROJECTILE_CLOSE_QUARTERS_GUARD",
+    name: "Close Quarters Guard",
+    description: "While your projectile has no pierce, hits against enemies within 220px deal 35% increased damage.",
+    tier: "t2",
+    familyId: "projectile",
+    tags: ["projectile", "defense", "damage", "close-range"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "NO_PIERCE_NEARBY_HIT_DAMAGE_INCREASED", rangePx: 220, increased: 0.35 }],
+    },
+  },
+  {
     id: "RING_DOT_DAMAGE_OVER_TIME_MORE_50",
     name: "50% More Damage Over Time",
     description: "Damage over time deals 50% more damage.",
-    tier: 1,
+    tier: "t2",
     familyId: "dot",
     tags: ["dot"],
     mainEffect: {
@@ -248,7 +373,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_DOT_SPECIALIST",
     name: "DOT Specialist",
     description: "50% less hit damage. Damage over time deals 200% more damage.",
-    tier: 1,
+    tier: "t1",
     familyId: "dot",
     tags: ["dot", "damage"],
     mainEffect: {
@@ -263,7 +388,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_DOT_TRIGGERED_HITS_CAN_APPLY_DOTS",
     name: "Triggered Hits Can Apply DOTs",
     description: "Damaging hits from triggered effects can apply DOTs.",
-    tier: 1,
+    tier: "t1",
     familyId: "dot",
     tags: ["dot", "trigger"],
     mainEffect: {
@@ -275,7 +400,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_CHAOS_ALL_HIT_DAMAGE_CONVERTED_TO_CHAOS",
     name: "All Hit Damage Converted to Chaos",
     description: "All hit damage is converted to chaos damage, including triggered effects.",
-    tier: 1,
+    tier: "t1",
     familyId: "chaos",
     tags: ["chaos", "conversion"],
     mainEffect: {
@@ -287,7 +412,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_POISON_CHANCE_PERCENT_25",
     name: "+25% Poison Chance",
     description: "Gain +25% poison chance.",
-    tier: 1,
+    tier: "t3",
     familyId: "poison",
     tags: ["poison"],
     mainEffect: {
@@ -296,10 +421,22 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_POISON_CHANCE_PERCENT_10",
+    name: "Dirty Needle",
+    description: "Gain 10% poison chance.",
+    tier: "t3",
+    familyId: "poison",
+    tags: ["poison"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 0.1 }],
+    },
+  },
+  {
     id: "RING_POISON_TRIGGER_EXTRA_STACK_CHANCE_25",
     name: "Poisons Can Add an Extra Stack",
     description: "Poisons have 25% chance to apply an additional stack.",
-    tier: 1,
+    tier: "t2",
     familyId: "poison",
     tags: ["poison"],
     mainEffect: {
@@ -311,7 +448,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_IGNITE_SPREAD_ON_DEATH",
     name: "Ignite Spreads on Death",
     description: "Ignite spreads to nearby enemies on death.",
-    tier: 1,
+    tier: "t1",
     familyId: "ignite",
     tags: ["ignite", "trigger"],
     mainEffect: {
@@ -324,7 +461,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_IGNITE_CRITS_APPLY_IGNITE",
     name: "Crits Apply Ignite",
     description: "Crits ignite the target for 100% of the hit damage.",
-    tier: 1,
+    tier: "t1",
     familyId: "ignite",
     tags: ["ignite", "crit"],
     mainEffect: {
@@ -334,10 +471,22 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_IGNITE_CHANCE_PERCENT_10",
+    name: "Small Spark",
+    description: "Gain 10% ignite chance.",
+    tier: "t3",
+    familyId: "ignite",
+    tags: ["ignite"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.CHANCE_TO_IGNITE_ADD, op: "add", value: 0.1 }],
+    },
+  },
+  {
     id: "RING_CRIT_ROLLS_TWICE",
     name: "Crit Rolls Twice",
     description: "Crit rolls twice.",
-    tier: 1,
+    tier: "t1",
     familyId: "crit",
     tags: ["crit"],
     mainEffect: {
@@ -346,10 +495,22 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_CRIT_CHANCE_PERCENT_5",
+    name: "Lucky Scratch",
+    description: "Gain 5% increased crit chance.",
+    tier: "t3",
+    familyId: "crit",
+    tags: ["crit"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.05 }],
+    },
+  },
+  {
     id: "RING_TRIGGER_BAZOOKA_ON_HIT",
     name: "Bazooka on Hit",
     description: "On hit: 10% chance to fire a bazooka dealing 300% of hit damage as physical damage.",
-    tier: 1,
+    tier: "t0",
     familyId: "trigger",
     tags: ["trigger", "projectile", "physical"],
     mainEffect: {
@@ -373,7 +534,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_TRIGGER_SPARK_ON_HIT",
     name: "Spark on Hit",
     description: "On hit: 20% chance to zap the nearest enemy dealing 100% of hit damage as fire damage.",
-    tier: 1,
+    tier: "t2",
     familyId: "trigger",
     tags: ["trigger", "projectile", "fire"],
     mainEffect: {
@@ -399,7 +560,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_TRIGGER_EXPLODE_ON_KILL",
     name: "Explode on Kill",
     description: "On kill: 20% chance for enemies to explode, dealing 50% of their maximum life as physical damage.",
-    tier: 1,
+    tier: "t1",
     familyId: "trigger",
     tags: ["trigger", "physical", "aoe"],
     mainEffect: {
@@ -419,7 +580,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_TRIGGER_DAGGER_ON_KILL",
     name: "Dagger on Kill",
     description: "On kill: 50% chance to fire a homing dagger at the nearest enemy dealing 100% of hit damage as physical damage.",
-    tier: 1,
+    tier: "t2",
     familyId: "trigger",
     tags: ["trigger", "projectile", "physical"],
     mainEffect: {
@@ -444,7 +605,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_TRIGGER_DOUBLE_TRIGGERS",
     name: "Double Triggers",
     description: "All triggers happen twice.",
-    tier: 1,
+    tier: "t0",
     familyId: "trigger",
     tags: ["trigger"],
     mainEffect: {
@@ -456,7 +617,7 @@ export const RING_DEFS_V1: RingDef[] = [
     id: "RING_TRIGGER_PROC_CHANCE_PERCENT_50",
     name: "+50% Trigger Proc Chance",
     description: "+50% increased trigger chance.",
-    tier: 1,
+    tier: "t1",
     familyId: "trigger",
     tags: ["trigger"],
     mainEffect: {
@@ -465,15 +626,118 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_TRIGGER_PROC_CHANCE_PERCENT_10",
+    name: "Twitchy Mechanism",
+    description: "Gain 10% increased trigger proc chance.",
+    tier: "t3",
+    familyId: "trigger",
+    tags: ["trigger"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "TRIGGER_PROC_CHANCE_INCREASED", increased: 0.1 }],
+    },
+  },
+  {
     id: "RING_TRIGGER_RETRY_FAILED_PROCS_ONCE",
     name: "Retry Failed Procs Once",
     description: "Failed procs retry once.",
-    tier: 1,
+    tier: "t1",
     familyId: "trigger",
     tags: ["trigger"],
     mainEffect: {
       kind: "COMBAT_RULES",
       rules: [{ kind: "RETRY_FAILED_TRIGGER_PROCS_ONCE" }],
+    },
+  },
+  {
+    id: "RING_HEALTH_MAX_LIFE_ADD_10",
+    name: "Minor Vitality",
+    description: "Gain 10 maximum life.",
+    tier: "t3",
+    familyId: "health",
+    tags: ["health", "life"],
+    mainEffect: {
+      kind: "STAT_MODIFIERS",
+      mods: [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }],
+    },
+  },
+  {
+    id: "RING_HEALTH_FLOOR_RECOVERY",
+    name: "Floor Recovery",
+    description: "Heal 10 health after completing a floor.",
+    tier: "t3",
+    familyId: "health",
+    tags: ["health", "recovery"],
+    mainEffect: {
+      kind: "FLOOR_LIFECYCLE",
+      trigger: "FLOOR_COMPLETE",
+      action: { kind: "HEAL_PLAYER", amount: 10 },
+    },
+  },
+  {
+    id: "RING_HEALTH_VITAL_FORCE",
+    name: "Vital Force",
+    description: "Deal increased damage equal to 20% of your maximum health.",
+    tier: "t1",
+    familyId: "health",
+    tags: ["health", "damage"],
+    mainEffect: {
+      kind: "DYNAMIC_STAT_MODIFIERS",
+      mods: [{ kind: "GLOBAL_HIT_DAMAGE_INCREASED_FROM_MAX_LIFE", increasedPerMaxLife: 0.002 }],
+    },
+  },
+  {
+    id: "RING_HEALTH_WOUNDED_FURY",
+    name: "Wounded Fury",
+    description: "Deal 5% increased damage for each 10 health missing.",
+    tier: "t2",
+    familyId: "health",
+    tags: ["health", "damage", "missing-life"],
+    mainEffect: {
+      kind: "DYNAMIC_STAT_MODIFIERS",
+      mods: [
+        {
+          kind: "GLOBAL_HIT_DAMAGE_INCREASED_PER_MISSING_LIFE",
+          missingLifeStep: 10,
+          increasedPerStep: 0.05,
+        },
+      ],
+    },
+  },
+  {
+    id: "RING_UTILITY_WIDER_SELECTION",
+    name: "Wider Selection",
+    description: "Ring rewards offer +1 additional option.",
+    tier: "t1",
+    familyId: "utility",
+    tags: ["utility", "reward"],
+    mainEffect: {
+      kind: "REWARD_RULES",
+      rules: [{ kind: "RING_REWARD_OPTION_COUNT_ADD", add: 1 }],
+    },
+  },
+  {
+    id: "RING_UTILITY_CURATED_REWARDS",
+    name: "Curated Rewards",
+    description: "Ring rewards are slightly more likely to contain a family you already have equipped.",
+    tier: "t1",
+    familyId: "utility",
+    tags: ["utility", "reward", "family"],
+    mainEffect: {
+      kind: "REWARD_RULES",
+      rules: [{ kind: "RING_REWARD_EQUIPPED_FAMILY_WEIGHT_MULTIPLIER", multiplier: 2 }],
+    },
+  },
+  {
+    id: "RING_UTILITY_SELECTIVE_HAND",
+    name: "Selective Hand",
+    description: "After each floor, you may reroll ring rewards once.",
+    tier: "t1",
+    familyId: "utility",
+    tags: ["utility", "reward", "reroll"],
+    mainEffect: {
+      kind: "REWARD_RULES",
+      rules: [{ kind: "RING_REWARD_REROLL_ADD", count: 1 }],
     },
   },
 ];
@@ -575,6 +839,27 @@ function validateCombatRule(
         issues.push({ path: `${path}.bonusPushPx`, message: "bonusPushPx must be a non-negative finite number" });
       }
       return;
+    case "NO_PIERCE_NEARBY_HIT_DAMAGE_INCREASED":
+      if (!Number.isFinite(rule.rangePx) || rule.rangePx <= 0) {
+        issues.push({ path: `${path}.rangePx`, message: "rangePx must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.increased) || rule.increased < 0) {
+        issues.push({ path: `${path}.increased`, message: "increased must be a non-negative finite number" });
+      }
+      return;
+    case "PHYSICAL_HIT_DAMAGE_INCREASED_NON_PHYSICAL_SUPPRESSED":
+      if (!Number.isFinite(rule.increased) || rule.increased < 0) {
+        issues.push({ path: `${path}.increased`, message: "increased must be a non-negative finite number" });
+      }
+      return;
+    case "PHYSICAL_HIT_DAMAGE_INCREASED_PER_EQUIPPED_FAMILY_RING":
+      if (typeof rule.familyId !== "string" || !(RING_FAMILY_IDS as readonly string[]).includes(rule.familyId)) {
+        issues.push({ path: `${path}.familyId`, message: "familyId must be a known ring family" });
+      }
+      if (!Number.isFinite(rule.increasedPerRing) || rule.increasedPerRing < 0) {
+        issues.push({ path: `${path}.increasedPerRing`, message: "increasedPerRing must be a non-negative finite number" });
+      }
+      return;
     case "POISON_EXTRA_STACK_CHANCE":
       if (!Number.isFinite(rule.chance) || rule.chance < 0 || rule.chance > 1) {
         issues.push({ path: `${path}.chance`, message: "chance must be a finite value between 0 and 1" });
@@ -594,6 +879,69 @@ function validateCombatRule(
       return;
     default:
       issues.push({ path: `${path}.kind`, message: `Unsupported combat rule: ${String((rule as { kind?: unknown }).kind)}` });
+  }
+}
+
+function validateDynamicStatModifier(
+  mod: DynamicStatModifierDef,
+  path: string,
+  issues: RingContentValidationIssue[],
+): void {
+  if (!mod || typeof mod !== "object") {
+    issues.push({ path, message: "Dynamic stat modifier must be an object" });
+    return;
+  }
+
+  switch (mod.kind) {
+    case "GLOBAL_HIT_DAMAGE_INCREASED_FROM_MAX_LIFE":
+      if (!Number.isFinite(mod.increasedPerMaxLife) || mod.increasedPerMaxLife < 0) {
+        issues.push({
+          path: `${path}.increasedPerMaxLife`,
+          message: "increasedPerMaxLife must be a non-negative finite number",
+        });
+      }
+      return;
+    case "GLOBAL_HIT_DAMAGE_INCREASED_PER_MISSING_LIFE":
+      if (!Number.isFinite(mod.missingLifeStep) || mod.missingLifeStep <= 0) {
+        issues.push({ path: `${path}.missingLifeStep`, message: "missingLifeStep must be a positive finite number" });
+      }
+      if (!Number.isFinite(mod.increasedPerStep) || mod.increasedPerStep < 0) {
+        issues.push({ path: `${path}.increasedPerStep`, message: "increasedPerStep must be a non-negative finite number" });
+      }
+      return;
+    default:
+      issues.push({ path: `${path}.kind`, message: `Unsupported dynamic stat modifier: ${String((mod as { kind?: unknown }).kind)}` });
+  }
+}
+
+function validateRewardRule(
+  rule: RewardRuleDef,
+  path: string,
+  issues: RingContentValidationIssue[],
+): void {
+  if (!rule || typeof rule !== "object") {
+    issues.push({ path, message: "Reward rule must be an object" });
+    return;
+  }
+
+  switch (rule.kind) {
+    case "RING_REWARD_OPTION_COUNT_ADD":
+      if (!Number.isFinite(rule.add) || rule.add < 0) {
+        issues.push({ path: `${path}.add`, message: "add must be a non-negative finite number" });
+      }
+      return;
+    case "RING_REWARD_EQUIPPED_FAMILY_WEIGHT_MULTIPLIER":
+      if (!Number.isFinite(rule.multiplier) || rule.multiplier < 1) {
+        issues.push({ path: `${path}.multiplier`, message: "multiplier must be a finite number greater than or equal to 1" });
+      }
+      return;
+    case "RING_REWARD_REROLL_ADD":
+      if (!Number.isFinite(rule.count) || rule.count < 0) {
+        issues.push({ path: `${path}.count`, message: "count must be a non-negative finite number" });
+      }
+      return;
+    default:
+      issues.push({ path: `${path}.kind`, message: `Unsupported reward rule: ${String((rule as { kind?: unknown }).kind)}` });
   }
 }
 
@@ -623,6 +971,45 @@ function validateEffectDef(effect: EffectDef, path: string, issues: RingContentV
       if (!Number.isFinite(mod.value)) {
         issues.push({ path: `${modPath}.value`, message: "Modifier value must be finite" });
       }
+    }
+    return;
+  }
+
+  if (effect.kind === "DYNAMIC_STAT_MODIFIERS") {
+    if (!Array.isArray(effect.mods) || effect.mods.length <= 0) {
+      issues.push({ path: `${path}.mods`, message: "DYNAMIC_STAT_MODIFIERS requires a non-empty mods[]" });
+      return;
+    }
+    for (let i = 0; i < effect.mods.length; i++) {
+      validateDynamicStatModifier(effect.mods[i], `${path}.mods[${i}]`, issues);
+    }
+    return;
+  }
+
+  if (effect.kind === "FLOOR_LIFECYCLE") {
+    if (!VALID_FLOOR_LIFECYCLE_TRIGGERS.has(effect.trigger)) {
+      issues.push({ path: `${path}.trigger`, message: `Unknown floor lifecycle trigger: ${String(effect.trigger)}` });
+    }
+    const action = effect.action as { kind?: unknown; amount?: unknown } | undefined;
+    if (!action || typeof action !== "object") {
+      issues.push({ path: `${path}.action`, message: "FLOOR_LIFECYCLE requires action" });
+      return;
+    }
+    if (action.kind !== "HEAL_PLAYER") {
+      issues.push({ path: `${path}.action.kind`, message: `Unsupported floor lifecycle action: ${String(action.kind)}` });
+    } else if (!Number.isFinite(action.amount) || Number(action.amount) < 0) {
+      issues.push({ path: `${path}.action.amount`, message: "HEAL_PLAYER amount must be a non-negative finite number" });
+    }
+    return;
+  }
+
+  if (effect.kind === "REWARD_RULES") {
+    if (!Array.isArray(effect.rules) || effect.rules.length <= 0) {
+      issues.push({ path: `${path}.rules`, message: "REWARD_RULES requires a non-empty rules[]" });
+      return;
+    }
+    for (let i = 0; i < effect.rules.length; i++) {
+      validateRewardRule(effect.rules[i], `${path}.rules[${i}]`, issues);
     }
     return;
   }
@@ -774,8 +1161,11 @@ export function validateRingContent(
     if (typeof def.description !== "string" || def.description.trim().length <= 0) {
       issues.push({ path: `${defPath}.description`, message: "Ring description must be a non-empty string" });
     }
-    if (def.tier !== 1) {
-      issues.push({ path: `${defPath}.tier`, message: "V1 ring content must lock every ring to tier 1" });
+    if (!isRingTier(def.tier)) {
+      issues.push({
+        path: `${defPath}.tier`,
+        message: `Ring tier must be one of ${RING_TIER_IDS.join(", ")}`,
+      });
     }
     validateEffectDef(def.mainEffect, `${defPath}.mainEffect`, issues);
   }

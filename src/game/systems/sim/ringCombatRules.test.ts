@@ -84,6 +84,19 @@ describe("ring combat rules", () => {
     expect(world.prDmgChaos[0]).toBeGreaterThan(0);
   });
 
+  test("Ricochet Rounds grants player weapon projectile bounces", () => {
+    const world = createWorld({ seed: 2021, stage: stageDocks });
+    (world as any).currentCharacterId = "JACK";
+    equipRing(world, "RING_PROJECTILE_BOUNCE_ADD_1", "LEFT:0");
+    spawnEnemyGrid(world, EnemyId.MINION, 1, 0);
+    rebuildEnemyHash(world);
+    world.primaryWeaponCdLeft = 0;
+
+    combatSystem(world, 1 / 60);
+
+    expect(world.prBouncesLeft[0]).toBe(1);
+  });
+
   test("crit rolls twice can convert a failed first roll into a crit", () => {
     const world = createWorld({ seed: 203, stage: stageDocks });
     equipRing(world, "RING_CRIT_ROLLS_TWICE", "LEFT:0");
@@ -137,6 +150,86 @@ describe("ring combat rules", () => {
     expect(Math.hypot(enemyAfter.wx - playerWorld.wx, enemyAfter.wy - playerWorld.wy)).toBeGreaterThan(
       Math.hypot(enemyBefore.wx - playerWorld.wx, enemyBefore.wy - playerWorld.wy),
     );
+  });
+
+  test("Close Quarters Guard increases nearby no-pierce projectile damage", () => {
+    const world = createWorld({ seed: 2052, stage: stageDocks });
+    equipRing(world, "RING_PROJECTILE_CLOSE_QUARTERS_GUARD", "LEFT:0");
+    const enemy = spawnEnemyGrid(world, EnemyId.MINION, 1, 0);
+    const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
+    const enemyAim = getEnemyAimWorld(world, enemy);
+    expect(Math.hypot(enemyAim.x - playerWorld.wx, enemyAim.y - playerWorld.wy)).toBeLessThan(220);
+    rebuildEnemyHash(world);
+    spawnPlayerProjectileAtEnemy(world, enemy, { damage: 10, dmgPhys: 10 });
+
+    collisionsSystem(world, 1 / 60);
+
+    const hitEvent = world.events.find((event) => event.type === "ENEMY_HIT") as any;
+    expect(hitEvent.damage).toBeCloseTo(13.5);
+    expect(hitEvent.dmgPhys).toBeCloseTo(13.5);
+  });
+
+  test("Close Quarters Guard ignores piercing projectiles and distant targets", () => {
+    const pierceWorld = createWorld({ seed: 2053, stage: stageDocks });
+    equipRing(pierceWorld, "RING_PROJECTILE_CLOSE_QUARTERS_GUARD", "LEFT:0");
+    const closeEnemy = spawnEnemyGrid(pierceWorld, EnemyId.MINION, 1, 0);
+    rebuildEnemyHash(pierceWorld);
+    spawnPlayerProjectileAtEnemy(pierceWorld, closeEnemy, { damage: 10, dmgPhys: 10, pierce: 1 });
+
+    collisionsSystem(pierceWorld, 1 / 60);
+
+    const pierceHit = pierceWorld.events.find((event) => event.type === "ENEMY_HIT") as any;
+    expect(pierceHit.damage).toBeCloseTo(10);
+
+    const distantWorld = createWorld({ seed: 2054, stage: stageDocks });
+    equipRing(distantWorld, "RING_PROJECTILE_CLOSE_QUARTERS_GUARD", "LEFT:0");
+    const distantEnemy = spawnEnemyGrid(distantWorld, EnemyId.MINION, 9, 9);
+    const playerWorld = getPlayerWorld(distantWorld, KENNEY_TILE_WORLD);
+    const enemyAim = getEnemyAimWorld(distantWorld, distantEnemy);
+    expect(Math.hypot(enemyAim.x - playerWorld.wx, enemyAim.y - playerWorld.wy)).toBeGreaterThan(220);
+    rebuildEnemyHash(distantWorld);
+    spawnPlayerProjectileAtEnemy(distantWorld, distantEnemy, { damage: 10, dmgPhys: 10 });
+
+    collisionsSystem(distantWorld, 1 / 60);
+
+    const distantHit = distantWorld.events.find((event) => event.type === "ENEMY_HIT") as any;
+    expect(distantHit.damage).toBeCloseTo(10);
+  });
+
+  test("Pure Force increases physical damage and suppresses non-physical damage", () => {
+    const world = createWorld({ seed: 2055, stage: stageDocks });
+    equipRing(world, "RING_PHYSICAL_PURE_FORCE", "LEFT:0");
+    const enemy = spawnEnemyGrid(world, EnemyId.MINION, 1, 0);
+    rebuildEnemyHash(world);
+    spawnPlayerProjectileAtEnemy(world, enemy, {
+      damage: 30,
+      dmgPhys: 10,
+      dmgFire: 10,
+      dmgChaos: 10,
+    });
+
+    collisionsSystem(world, 1 / 60);
+
+    const hitEvent = world.events.find((event) => event.type === "ENEMY_HIT") as any;
+    expect(hitEvent.damage).toBeCloseTo(13);
+    expect(hitEvent.dmgPhys).toBeCloseTo(13);
+    expect(hitEvent.dmgFire).toBe(0);
+    expect(hitEvent.dmgChaos).toBe(0);
+  });
+
+  test("Physical Devotion counts itself and another physical ring", () => {
+    const world = createWorld({ seed: 2056, stage: stageDocks });
+    equipRing(world, "RING_PHYSICAL_DEVOTION", "LEFT:0");
+    equipRing(world, "RING_PHYSICAL_DAMAGE_PERCENT_10", "LEFT:1");
+    const enemy = spawnEnemyGrid(world, EnemyId.MINION, 1, 0);
+    rebuildEnemyHash(world);
+    spawnPlayerProjectileAtEnemy(world, enemy, { damage: 10, dmgPhys: 10 });
+
+    collisionsSystem(world, 1 / 60);
+
+    const hitEvent = world.events.find((event) => event.type === "ENEMY_HIT") as any;
+    expect(hitEvent.damage).toBeCloseTo(14);
+    expect(hitEvent.dmgPhys).toBeCloseTo(14);
   });
 
   test("Thermal Starter increases hit damage against burning enemies", () => {

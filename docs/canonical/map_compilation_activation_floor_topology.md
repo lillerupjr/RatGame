@@ -42,13 +42,23 @@ Own the conversion from authored map definitions and selected floor intents into
 ## Pipeline
 
 1. **Authored Load**: `AUTHORED_MAP_DEFS` eager-imports authored JSON via `authoredMapRegistry.ts`. `loadTableMapDefFromJson()` validates JSON and produces `TableMapDef`; chunk grids may stitch chunks, add ocean borders, and preserve cells, stamps, road rects, lights, and authored `objectiveDefs`.
-2. **Floor Topology**: `createDelveMap(seed, config)` normalizes config, builds row/lane layouts and adjacent-row edges, validates connectivity, and assigns node plans carrying `zoneId`, `mapId`, `objectiveId`, `variantSeed`, optional `bossId`. Deterministic path-select mode skips `DelveMap` and derives a one-row route in `game.ts` / `routeMapView.ts`.
+2. **Floor Topology**: `createDelveMap(seed, config)` normalizes config, builds row/lane layouts and adjacent-row edges, validates connectivity, assigns node plans carrying `zoneId`, `mapId`, `objectiveId`, `variantSeed`, optional `bossId`, and assigns per-node `rewardFamily`. Deterministic path-select mode skips `DelveMap` and derives a one-row route in `game.ts` / `routeMapView.ts`.
 3. **Floor Intent**: `moveToNode()` records pending selection. `buildFloorIntentFromDelveNode()`, `buildDeterministicFloorIntent()`, or `buildFallbackFloorIntent()` creates `FloorIntent` with node/stage/zone/depth/floor index/archetype/map/objective/boss ids/variant seed/placement params.
 4. **Objective Binding**: `applyObjective()` shallow-clones `TableMapDef` and replaces `objectiveDefs` for the selected `ObjectiveId`; `objectiveSpecFromFloorIntent()` independently derives runtime spec from the same `FloorIntent`.
 5. **Activation**: `beginFloorLoad()` resolves base map, applies objective transforms, then calls `activateMapDefAsync(finalMap, variantSeed)`. `activateMapDef*()` clears `canvasGroundChunkCacheStore`, delegates to `setActiveMap*()`, stores active authored and compiled maps, and updates active render skin id.
 6. **Compile**: `setActiveMapAsync()` performs required monolithic semantic prepass, asserts completeness, compiles, and clears ramp cache. `compileKenneyMapFromTable()` outputs `CompiledKenneyMap`. Monolithic placement resolves semantic geometry per skin/sprite before oriented footprint size and SE-anchor placement; it does not read authored skin `w`/`h`/`heightUnits` directly. Structure geometry details live in `docs/canonical/structure_geometry_slicing_system.md`.
 7. **Compiled Output / Queries**: compiled map includes origin, dimensions, spawn/goal, `IsoTile`, surfaces/tops by layer, face pieces, occluders, overlays, decals, `bossSpawn`, lights, trigger defs, blocked tiles/spans, tile heights, road masks/markings, occlusion geometry. `kenneyMap.ts` exposes active compiled queries; `authoredMapActivation.ts` exposes active authored map, safe spawn/goal, walkability/stairs/height checks, map stats, ASCII debug export.
 8. **Overlay Placement**: `applyFloorOverlays()` reads active compiled map and spawn tile, flood-fills reachable tiles with connector-aware height transitions, chooses centers by `LONGEST_PATH` or `STATIC_POINTS`, and writes trigger defs into `world.overlayTriggerDefs`.
+
+## Reward Family Assignment
+
+`assignRewardFamilies(seed, nodes)` runs after utility-type assignment (SHOP/REST) and before finalization. It assigns `DelveNode.rewardFamily` to eligible node types (COMBAT, ELITE, QUESTION_MARK). Non-eligible types (REST, SHOP, BOSS) receive no `rewardFamily`.
+
+- **Pool**: `RING` and `RING_MODIFIER_TOKEN` only (V1). `HAND_EFFECT` excluded until the hand system is built.
+- **Budget**: RING 55%, RING_MODIFIER_TOKEN 45% of total eligible nodes. `Math.ceil(N * 0.55)` goes to RING, remainder to RING_MODIFIER_TOKEN.
+- **Diversity constraint**: Multi-node rows are guaranteed to contain at least 2 distinct families, enabling routing choice. Nodes within each row are shuffled before assignment to avoid lane-position bias.
+- **Determinism**: Uses `RNG(seed ^ hashString("reward-families"))`, fully reproducible per seed.
+- **Fallback**: `routeMapView.ts` and `game.ts` fall back to `defaultRewardFamilyForDepth()` if `node.rewardFamily` is undefined (backwards compatibility with maps generated before this feature).
 
 ## Invariants
 
@@ -65,6 +75,7 @@ Own the conversion from authored map definitions and selected floor intents into
 - Delve edges connect adjacent rows and never jump more than one lane.
 - `moveToNode()` only records `pendingNodeId`; `commitPendingNode()` commits.
 - `markCurrentNodeCleared()` marks current node complete, not next-node choice.
+- Every multi-node row of eligible types has at least 2 distinct `rewardFamily` values.
 - `applyObjective()` only replaces `objectiveDefs` on a returned map clone.
 - `applyFloorOverlays()` derives placements from active-map reachable topology starting at spawn.
 

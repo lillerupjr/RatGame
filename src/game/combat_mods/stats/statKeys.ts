@@ -27,6 +27,9 @@ export const STAT_KEYS = {
   // Projectile
   PROJECTILES_ADD: "projectiles.add",
   PROJECTILE_SPEED_INCREASED: "projectileSpeed.increased",
+  PROJECTILE_HIT_DAMAGE_INCREASED: "projectileHitDamage.increased",
+  PROJECTILE_HIT_DAMAGE_LESS: "projectileHitDamage.less",
+  PROJECTILE_BOUNCE_ADD: "projectileBounce.add",
   PIERCE_ADD: "pierce.add",
 
   // Ailment chances

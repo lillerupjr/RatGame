@@ -70,7 +70,7 @@ Intent:
 * `familyId` points to a shared family tree such as poison or projectile
 * the ring’s main authored effect lives here
 * `mainEffect` is the only canonical field for authored ring behavior; redundant `effectType` / `effectParams` fields are not allowed
-* `tier` is locked to `1` in the first authored V1 content pass
+* `tier` is an authored rarity string: `t0`, `t1`, `t2`, or `t3`
 
 ### RingInstance
 
@@ -140,6 +140,7 @@ The current backend family list is:
 * `ignite`
 * `crit`
 * `trigger`
+* `health`
 * `defense`
 * `utility`
 
@@ -232,9 +233,13 @@ Passive and triggered ring behavior must route through centralized progression e
 LOCKED truths:
 
 * `STAT_MODIFIERS` is the canonical passive stat path
+* `DYNAMIC_STAT_MODIFIERS` is the canonical passive stat path for world-state-derived ring stats such as max-life and missing-life damage scaling
 * ring main effects and unlocked talent nodes both emit runtime effects
 * triggered ring effects execute through the progression trigger dispatcher
 * `COMBAT_RULES` is the canonical non-passive, non-hand rule surface for combat-owned ring behavior
+* `FLOOR_LIFECYCLE` is the canonical non-combat lifecycle surface for committed floor-clear ring effects
+* `REWARD_RULES` is the canonical reward-generation surface for ring-owned reward option count, equipped-family bias, and reward rerolls
+* combat-rule snapshots may use equipped ring-family counts, but ring state remains the only source of equipped family identity
 * hand structure effects are authored through progression effect definitions but mutate hand state through dedicated hand mutators
 
 Do not reintroduce separate relic-effect, card-passive, or ad hoc combat hook pipelines.
@@ -256,7 +261,7 @@ This surface is ring-owned. Old relic-trigger ownership must not return.
 
 The first authored V1 content pass is intentionally narrow:
 
-* every authored ring is `tier: 1`
+* every authored ring has an explicit `t0`, `t1`, `t2`, or `t3` tier
 * every family tree exists
 * every family tree is empty
 * no passive nodes are authored yet
@@ -275,6 +280,10 @@ LOCKED truths:
   * `RING_MODIFIER_TOKEN`
   * `HAND_EFFECT`
 * offers are typed backend objects with structured payloads
+* generated ring rewards use tier-weighted selection over non-starter authored rings
+* active progression reward generation may apply equipped ring `REWARD_RULES`; vendor inventory generation uses the base reward generator and is not modified by those rules
+* ring reward options carry `authoredTier` and `rolledTier`
+* starter-family rings are not normal generated reward drops
 * reward or vendor code must not depend on string-parsed payload ids to recover behavior
 
 ---

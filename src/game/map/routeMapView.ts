@@ -200,7 +200,7 @@ export function buildDelveRouteMapVM(
     .map((node) => {
       const current = node.id === delveMap.currentNodeId;
       const visualType = visualTypeForNodeType(node.nodeType);
-      const rewardFamily = defaultRewardFamilyForDepth(node.rowIndex + 1);
+      const rewardFamily = node.rewardFamily ?? defaultRewardFamilyForDepth(node.rowIndex + 1);
       return {
         id: node.id,
         mode: "DELVE" as const,

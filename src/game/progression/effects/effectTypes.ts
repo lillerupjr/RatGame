@@ -42,6 +42,56 @@ export type StatModifierEffectDef = {
   mods: StatMod[];
 };
 
+export type DynamicStatModifierDef =
+  | {
+      kind: "GLOBAL_HIT_DAMAGE_INCREASED_FROM_MAX_LIFE";
+      increasedPerMaxLife: number;
+    }
+  | {
+      kind: "GLOBAL_HIT_DAMAGE_INCREASED_PER_MISSING_LIFE";
+      missingLifeStep: number;
+      increasedPerStep: number;
+    };
+
+export type DynamicStatModifierEffectDef = {
+  kind: "DYNAMIC_STAT_MODIFIERS";
+  mods: DynamicStatModifierDef[];
+};
+
+export type FloorLifecycleTrigger = "FLOOR_COMPLETE";
+
+export type HealPlayerFloorLifecycleActionDef = {
+  kind: "HEAL_PLAYER";
+  amount: number;
+};
+
+export type FloorLifecycleActionDef = HealPlayerFloorLifecycleActionDef;
+
+export type FloorLifecycleEffectDef = {
+  kind: "FLOOR_LIFECYCLE";
+  trigger: FloorLifecycleTrigger;
+  action: FloorLifecycleActionDef;
+};
+
+export type RewardRuleDef =
+  | {
+      kind: "RING_REWARD_OPTION_COUNT_ADD";
+      add: number;
+    }
+  | {
+      kind: "RING_REWARD_EQUIPPED_FAMILY_WEIGHT_MULTIPLIER";
+      multiplier: number;
+    }
+  | {
+      kind: "RING_REWARD_REROLL_ADD";
+      count: number;
+    };
+
+export type RewardRulesEffectDef = {
+  kind: "REWARD_RULES";
+  rules: RewardRuleDef[];
+};
+
 export type TriggeredEffectDef = {
   kind: "TRIGGERED";
   triggerKey: TriggerKey;
@@ -140,6 +190,23 @@ export type PointBlankCloseHitKnockbackCombatRule = {
   bonusPushPx: number;
 };
 
+export type NoPierceNearbyHitDamageIncreasedCombatRule = {
+  kind: "NO_PIERCE_NEARBY_HIT_DAMAGE_INCREASED";
+  rangePx: number;
+  increased: number;
+};
+
+export type PhysicalHitDamageIncreasedNonPhysicalSuppressedCombatRule = {
+  kind: "PHYSICAL_HIT_DAMAGE_INCREASED_NON_PHYSICAL_SUPPRESSED";
+  increased: number;
+};
+
+export type PhysicalHitDamageIncreasedPerEquippedFamilyRingCombatRule = {
+  kind: "PHYSICAL_HIT_DAMAGE_INCREASED_PER_EQUIPPED_FAMILY_RING";
+  familyId: string;
+  increasedPerRing: number;
+};
+
 export type CritRollsTwiceCombatRule = {
   kind: "CRIT_ROLLS_TWICE";
 };
@@ -177,6 +244,9 @@ export type CombatRuleDef =
   | MoreDamageToBurningTargetsCombatRule
   | PointBlankDamageFalloffCombatRule
   | PointBlankCloseHitKnockbackCombatRule
+  | NoPierceNearbyHitDamageIncreasedCombatRule
+  | PhysicalHitDamageIncreasedNonPhysicalSuppressedCombatRule
+  | PhysicalHitDamageIncreasedPerEquippedFamilyRingCombatRule
   | CritRollsTwiceCombatRule
   | TriggeredHitsCanApplyDotsCombatRule
   | ConvertAllHitDamageToChaosCombatRule
@@ -198,6 +268,9 @@ export type StructuralHandEffectDef = {
 
 export type EffectDef =
   | StatModifierEffectDef
+  | DynamicStatModifierEffectDef
+  | FloorLifecycleEffectDef
+  | RewardRulesEffectDef
   | TriggeredEffectDef
   | CombatRulesEffectDef
   | StructuralHandEffectDef;

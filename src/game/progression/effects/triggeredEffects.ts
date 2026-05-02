@@ -22,7 +22,13 @@ import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
 import { queryCircle } from "../../util/spatialHash";
 import { isEnemyInCircle } from "../../systems/sim/hitDetection";
 import { finalizeEnemyDeath } from "../../systems/enemies/finalize";
-import { collectWorldCombatRules, applyChaosHitConversion, scaleTriggerProcChance, type CombatRulesSnapshot } from "./combatRules";
+import {
+  applyChaosHitConversion,
+  applyNonPhysicalHitDamageSuppression,
+  collectWorldCombatRules,
+  scaleTriggerProcChance,
+  type CombatRulesSnapshot,
+} from "./combatRules";
 import { collectWorldRuntimeEffects, collectWorldStatMods } from "./worldEffects";
 import type {
   RuntimeEffect,
@@ -254,11 +260,12 @@ function resolveTriggerDamageBundle(
     { physical: raw.physical, fire: raw.fire, chaos: raw.chaos },
     rules,
   );
+  const finalDamage = applyNonPhysicalHitDamageSuppression(converted, rules);
   return {
-    physical: converted.physical,
-    fire: converted.fire,
-    chaos: converted.chaos,
-    total: converted.physical + converted.fire + converted.chaos,
+    physical: finalDamage.physical,
+    fire: finalDamage.fire,
+    chaos: finalDamage.chaos,
+    total: finalDamage.physical + finalDamage.fire + finalDamage.chaos,
   };
 }
 

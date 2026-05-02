@@ -25,7 +25,11 @@ import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
 import { isLootGoblinEnemy } from "../neutral/lootGoblin";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { collectWorldStatMods } from "../../progression/effects/worldEffects";
-import { collectWorldCombatRules } from "../../progression/effects/combatRules";
+import {
+  applyNonPhysicalHitDamageSuppression,
+  applyPhysicalHitDamageIncreased,
+  collectWorldCombatRules,
+} from "../../progression/effects/combatRules";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 import { breakMomentumOnLifeDamage } from "./momentum";
@@ -333,6 +337,7 @@ export function collisionsSystem(w: World, dt: number) {
           ? makeWeaponHitMeta(source, { category: "HIT", instigatorId: "player" })
           : makeUnknownDamageMeta("PROJECTILE_DAMAGE_META_MISSING"));
       const projectileIsProc = isProcDamage(projectileDamageMeta);
+      const projectileIsPlayerOwned = projectileDamageMeta.instigator?.actor === "PLAYER";
       const physBefore = w.prDmgPhys[p] ?? 0;
       const fireBefore = w.prDmgFire[p] ?? 0;
       const chaosBefore = w.prDmgChaos[p] ?? 0;
@@ -411,6 +416,42 @@ export function collisionsSystem(w: World, dt: number) {
         finalPhysDealt *= damageMult;
         finalFireDealt *= damageMult;
         finalChaosDealt *= damageMult;
+      }
+
+      if (
+        projectileIsPlayerOwned
+        && !projectileIsProc
+        && combatRules.noPierceNearbyHitDamageIncreased
+        && Math.max(0, w.prPierce[p] ?? 0) === 0
+      ) {
+        const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
+        const distToPlayer = Math.hypot(enemyAim.x - playerNow.wx, enemyAim.y - playerNow.wy);
+        if (distToPlayer <= combatRules.noPierceNearbyHitDamageIncreased.rangePx) {
+          const damageMult = 1 + combatRules.noPierceNearbyHitDamageIncreased.increased;
+          finalPhysDealt *= damageMult;
+          finalFireDealt *= damageMult;
+          finalChaosDealt *= damageMult;
+        }
+      }
+
+      if (projectileIsPlayerOwned && !projectileIsProc) {
+        const scaled = applyPhysicalHitDamageIncreased(
+          { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
+          combatRules,
+        );
+        finalPhysDealt = scaled.physical;
+        finalFireDealt = scaled.fire;
+        finalChaosDealt = scaled.chaos;
+      }
+
+      if (projectileIsPlayerOwned) {
+        const suppressed = applyNonPhysicalHitDamageSuppression(
+          { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
+          combatRules,
+        );
+        finalPhysDealt = suppressed.physical;
+        finalFireDealt = suppressed.fire;
+        finalChaosDealt = suppressed.chaos;
       }
 
       const ailmentChances =
