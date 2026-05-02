@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     sync and query static structure/decal atlas pages for a compiled map context
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no dynamic runtime sprites, shared atlas mode, or backend submission — see dynamicAtlasStore.ts, sharedWorldAtlasStore.ts, and renderWorldConsumers.ts
+
 import { getRuntimeDecalSprite, getTileSpriteById } from "../../../engine/render/sprites/renderSprites";
 import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import type { DecalPiece } from "../../map/compile/kenneyMap";

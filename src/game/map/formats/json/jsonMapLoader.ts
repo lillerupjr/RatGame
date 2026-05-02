@@ -1,4 +1,9 @@
 // src/game/map/jsonMapLoader.ts
+// @system   map-compilation/activation/floor-topology
+// @owns     parse structured JSON maps, expand chunks, and normalize TableMapDef output
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no compile-time tile realization or active map mutation; see kenneyMap.ts and authoredMapActivation.ts
+
 import type {
   ApronBaseMode,
   TableMapCell,

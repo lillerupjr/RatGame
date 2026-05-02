@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     resolve crit rolls and typed projectile damage packets
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no projectile movement, collision broadphase, or stat grouping; see projectiles.ts, collisions.ts, and combatStatsResolver.ts
+
 export interface ProjectileDamagePacket {
   physical: number;
   fire: number;

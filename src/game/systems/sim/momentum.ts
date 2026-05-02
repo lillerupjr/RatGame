@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     manage momentum gain, decay, break, and full-momentum events
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no armor damage absorption or UI; see playerArmor.ts
+
 import type { World } from "../../../engine/world/world";
 import { restoreArmor } from "./playerArmor";
 import type { GameEvent } from "../../events";

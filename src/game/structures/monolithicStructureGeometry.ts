@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     build runtime structure triangle caches, geometry signatures, and parent-tile grouping
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no semantic prepass loading, drawable enqueueing, or shadow mask generation — see monolithicBuildingSemanticPrepass.ts, presentation/structures/, and shadow_lighting_system.md
+
 import { screenToWorld, worldToScreen, ISO_X } from "../../engine/math/iso";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { getTileSpriteById, type LoadedImg } from "../../engine/render/sprites/renderSprites";

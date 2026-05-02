@@ -1,3 +1,8 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     choose deterministic act-boss map and boss ids for floor intent planning
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no boss actor spawn, encounter registration, or boss ability runtime; see spawnBossEncounter.ts and bossSystem.ts
+
 import { getAuthoredMapDefByMapId } from "../map/authored/authoredMapRegistry";
 import { RNG } from "../util/rng";
 import { BossId, type BossId as BossIdType } from "./bossTypes";

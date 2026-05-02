@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     interleave ground, world-band, world-slice, world-tail, and screen render commands
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no drawable collection or backend submission; see collectFrameDrawables.ts and renderBackendRouting.ts
+
 import type { RenderCommand, RenderFrame } from "../contracts/renderCommands";
 import { resolveRenderZBand } from "../worldRenderOrdering";
 

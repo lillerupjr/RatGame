@@ -4,6 +4,11 @@
 // Tracks player position relative to rooms and manages kill-count challenges
 // that lock room exits until a certain number of enemies are defeated.
 
+// @system   progression/objectives/rewards
+// @owns     track room challenge locks, room entry, and kill-count progress
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no run rewards or map objective specs; see rewardDirector.ts and objectiveSpec.ts
+
 import { World, emitEvent } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { worldToTile } from "../../coords/tile";

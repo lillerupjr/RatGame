@@ -1,4 +1,8 @@
 // src/game/systems/progression/triggerSystem.ts
+// @system   progression/objectives/rewards
+// @owns     rebuilds active trigger registry and emits enter, exit, interact, kill, and timer signals
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no objective resolution, reward capture, or floor advancement; see objective.ts, rewardRunEventProducerSystem.ts, and game.ts
 
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";

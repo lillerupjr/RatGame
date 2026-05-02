@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     finalize enemy death, execute death effects, and emit kill events
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no hit detection or spawn budgeting; see hitDetection.ts and hostileSpawnDirector.ts
+
 import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getBossDefinitionForEntity, markBossEncounterDefeated } from "../../bosses/bossRuntime";

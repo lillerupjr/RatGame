@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     normalize and mutate ring progression state, slots, tokens, talents, and hand effects
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no ring content authoring, inspection snapshots, or UI rendering; see ringContent.ts, ringInspection.ts, and handsScreen.ts
+
 import {
   getRingDefById,
   getRingFamilyTalentTreeById,

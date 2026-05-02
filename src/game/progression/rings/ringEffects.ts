@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     collect runtime effects and stat mods from equipped rings and unlocked talents
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no state mutation or scalar stat resolution; see ringState.ts and combatStatsResolver.ts
+
 import type { RuntimeEffect, StatMod } from "../effects/effectTypes";
 import { collectStatModsFromRuntimeEffects } from "../effects/statMods";
 import { getRingDefById, getRingFamilyTalentTreeById } from "./ringContent";

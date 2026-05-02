@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     enqueue screen overlays, ambient darkness, debug primitives, and heightmap shadow commands
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no final UI drawing, world collection, or shadow math — see renderUiPass.ts, collectFrameDrawables.ts, and shadow_lighting_system.md
+
 import type { ScreenOverlayContext } from "../contracts/screenOverlayContext";
 import { enqueueScreenCommand, enqueueWorldBandCommand, enqueueWorldTailCommand } from "../frame/renderFrameBuilder";
 

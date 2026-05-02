@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     place zone objectives, track activation/completion state, and emit completion signals
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no objective spec translation or floor reward budgeting; see objectiveSpec.ts and floorRewardBudget.ts
+
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { worldToTile } from "../coords/tile";

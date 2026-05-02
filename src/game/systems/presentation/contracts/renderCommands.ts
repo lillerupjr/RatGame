@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     define render command passes, semantic families, payloads, axes keys, and frame contract
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no ordering comparator, collection context, or backend pieces — see worldRenderOrdering.ts, collectionContext.ts, and renderPieceTypes.ts
+
 import type { RenderKey } from "../worldRenderOrdering";
 
 export type RenderPass = "GROUND" | "WORLD" | "SCREEN";

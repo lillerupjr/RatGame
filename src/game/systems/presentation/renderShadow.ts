@@ -1,3 +1,8 @@
+// @system   shadow-lighting/system
+// @owns     derive sun model defaults and render entity shadow ellipses from support surfaces
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no day-cycle runtime, heightmap masks, or ambient overlay — see shadowSunDayCycleRuntime.ts, heightmapShadow/, and renderLighting.ts
+
 import type { CompiledKenneyMap } from "../../map/compile/kenneyMap";
 import { getSupportSurfaceAt } from "../../map/compile/kenneyMap";
 import {

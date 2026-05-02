@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     define progression reward family/source vocabulary and depth defaults
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no option generation, ticket scheduling, or ring state mutation; see progressionOffers.ts, rewardSchedulerSystem.ts, and progressionRewardFlow.ts
+
 export type ProgressionRewardFamily = "RING" | "RING_MODIFIER_TOKEN" | "HAND_EFFECT";
 
 export type ProgressionRewardSource =

@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     define structure overlay, admission, slice-piece, and drawable presentation contracts
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no geometry computation, cache validation, or render command enqueueing — see monolithicStructureGeometry.ts, structureMergedSliceCache.ts, and collectStructureDrawables.ts
+
 import type { StampOverlay, ViewRect } from "../../../map/compile/kenneyMap";
 import type {
   RuntimeStructureAnchorPlacementDebug,

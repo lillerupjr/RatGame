@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     compute projectile spread directions and multi-projectile angle offsets
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no firing cadence or projectile spawning; see combat.ts and projectileFactory.ts
+
 export interface RandomRange {
   range(min: number, max: number): number;
 }

@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     define, normalize, reset, and transition enemy brain state
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no behavior decisions or ability effects; see behavior.ts and actions.ts
+
 import type { World } from "../../../engine/world/world";
 import { EnemyId, type EnemyDefinition } from "../../content/enemies";
 import { registry } from "../../content/registry";

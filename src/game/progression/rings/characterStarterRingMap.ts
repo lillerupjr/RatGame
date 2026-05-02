@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     resolve playable-character starter rings and equip them into the starter slot
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no starter weapon mapping or reward option generation; see characterStarterMap.ts and progressionOffers.ts
+
 import type { PlayableCharacterId } from "../../content/playableCharacters";
 import { equipRing, ensureRingProgressionState, getFingerSlot } from "./ringState";
 import type { FingerSlotId, RingInstance } from "./ringTypes";

@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     mutate run XP, level state, and LEVEL_UP events
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no reward choice generation or vendor offers; see rewardDirector.ts and generateVendorProgressionOffers.ts
+
 import { getSettings } from "../../settings/settingsStore";
 import { DEFAULT_XP_LEVEL_BASE, DEFAULT_XP_LEVEL_GROWTH } from "../../settings/systemOverrides";
 import { enqueueRunEvent } from "../rewards/runEvents";

@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     declare Stage-D deferred render family dispositions
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no live backend routing or final backend signoff; see renderBackendRouting.ts and renderFinalBackendMatrix.ts
+
 export type StageDDeferredDisposition =
   | "PORT_STAGE_D_NOW"
   | "KEEP_CANVAS_FALLBACK"

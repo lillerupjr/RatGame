@@ -1,3 +1,8 @@
+// @system   shadow-lighting/system
+// @owns     resolve sun position, shadow projection, step keys, and ambient-light state
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no frame runtime, heightmap masks, or entity drawing — see shadowSunDayCycleRuntime.ts, heightmapShadow/, and renderShadow.ts
+
 export const SHADOW_SUN_V1_DAYLIGHT_START_HOUR = 7;
 export const SHADOW_SUN_V1_SOLAR_NOON_HOUR = 13;
 export const SHADOW_SUN_V1_DAYLIGHT_END_HOUR = 19;

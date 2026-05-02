@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     orchestrate ground, effect, entity, and structure drawable collection
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no per-family collection logic, frame sorting, or backend submission — see collectGroundDrawables.ts, collectEntityDrawables.ts, collectStructureDrawables.ts, and renderWorldConsumers.ts
+
 import { collectGroundDrawables } from "./collectGroundDrawables";
 import { collectEffectDrawables } from "./collectEffectDrawables";
 import { collectEntityDrawables } from "./collectEntityDrawables";

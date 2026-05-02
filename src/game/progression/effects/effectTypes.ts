@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     define runtime effect, stat modifier, trigger action, and combat rule vocabularies
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no ring content, state mutation, or trigger execution; see ringContent.ts, ringState.ts, and triggeredEffects.ts
+
 import type { TriggerKey } from "../../events";
 import type { StatKey } from "../../combat_mods/stats/statKeys";
 import type { ProjectileKind } from "../../factories/projectileFactory";

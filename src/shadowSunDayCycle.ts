@@ -1,3 +1,8 @@
+// @system   shadow-lighting/system
+// @owns     clamp, advance, quantize, and format shadow day-cycle time
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no per-world runtime state or sun-vector projection — see shadowSunDayCycleRuntime.ts and shadowSunV1.ts
+
 import {
   SHADOW_SUN_V1_DAYLIGHT_END_HOUR,
   SHADOW_SUN_V1_DAYLIGHT_START_HOUR,

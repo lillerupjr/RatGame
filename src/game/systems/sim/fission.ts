@@ -1,5 +1,10 @@
 // src/game/systems/fission.ts
 
+// @system   core-simulation/combat-runtime
+// @owns     detect fission projectile pairs and spawn split projectiles
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no projectile movement or collision map queries; see projectiles.ts and collision3D.ts
+
 import type { World } from "../../../engine/world/world";
 import { spawnProjectileGrid, PRJ_KIND } from "../../factories/projectileFactory";
 import { worldToGrid } from "../../coords/grid";

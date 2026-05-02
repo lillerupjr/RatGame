@@ -22,6 +22,7 @@ Own floor progression: trigger facts, objective intent, kill/zone/chest/level mi
 - Hostile spawn/AI and boss runtime: `docs/canonical/hostile_ai_spawn_runtime.md`, `docs/canonical/boss_encounter_system.md`
 - Map compilation/floor intent generation: `docs/canonical/map_compilation_activation_floor_topology.md`
 - Dialog/reward/vendor/HUD UI layout: `docs/canonical/ui_shell_menus_runtime_panels.md`
+- Ring progression model, state, effects, content, hands screen: `docs/canonical/ring_progression_system.md`
 - Ring option generation/stat application beyond opening/apply path: `docs/canonical/combat_mods_stat_resolution_loadout_effects.md`
 - Audio/VFX rendering
 

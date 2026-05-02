@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     accumulate render perf counters, cache metrics snapshots, and backend submission diagnostics
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no cache lifecycle decisions, render command ordering, or settings UI — see cache owners, worldRenderOrdering.ts, and settings_overrides_debug_controls.md
+
 import type { CacheMetricsSnapshot } from "./cacheMetricsRegistry";
 import { sampleCacheMetricsRegistry } from "./cacheMetricsRegistry";
 

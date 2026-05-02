@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     derives floor-complete countdown keys and start, tick, done helpers
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no objective completion, reward pipeline, or next-floor selection; see objective.ts, rewardPresenterSystem.ts, and game.ts
+
 import { hasCompletedAnyObjective } from "./objective";
 
 export const FLOOR_END_COUNTDOWN_SEC = 10;

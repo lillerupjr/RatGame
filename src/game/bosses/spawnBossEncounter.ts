@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     spawn boss actors and register encounters from explicit or map positions
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no boss AI tick or ability casting; see bossSystem.ts and bossAbilityRunner.ts
+
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { EnemyId } from "../content/enemies";

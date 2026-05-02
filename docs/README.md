@@ -19,5 +19,6 @@ This folder is intentionally strict. If a document does not describe the current
 
 ## Current Canonical Progression Docs
 
-- `contracts/implemented/ring_v1_backend_contract.md`
-- `contracts/implemented/ring_v1_content_catalog.md`
+- `canonical/ring_progression_system.md` — source of truth for ring/hand progression backend, effects pipeline, and hands screen UI
+- `contracts/implemented/ring_v1_backend_contract.md` — historical V1 backend contract (decisions and locked rules)
+- `contracts/implemented/ring_v1_content_catalog.md` — historical V1 ring content catalog (shipped ring list and provenance)

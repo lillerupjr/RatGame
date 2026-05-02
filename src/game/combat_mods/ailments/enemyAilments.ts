@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     manage enemy ailment stack storage, insertion, normalization, and expiry
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no hit-to-ailment rolls or DOT damage ticks; see applyAilmentsFromHit.ts and ailmentTickSystem.ts
+
 import {
   AILMENT_DURATIONS,
   AILMENT_STACK_CAP,

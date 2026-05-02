@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     define arena pattern specs and arena sequence runtime types
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no pattern generation or tile-effect mutation; see bossArenaPatterns.ts and bossArenaActions.ts
+
 import type { DamageMeta } from "../events";
 import type { ArenaCell, BossArena } from "./bossArena";
 import type { AnimatedSurfaceId } from "../systems/presentation/animatedSurfaces/animatedSurfaceTypes";

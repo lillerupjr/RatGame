@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     classify render command backend capability and accumulate backend stats
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no backend policy selection or command ordering; see renderBackendSelection.ts and renderExecutionPlan.ts
+
 import { renderCommandAxesKey, type RenderCommand } from "../contracts/renderCommands";
 import { ZONE_KIND } from "../../../factories/zoneFactory";
 import { getRenderCapabilityEntry } from "./renderCapabilityMatrix";

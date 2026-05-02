@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     classify runtime structure triangle semantics and attach roof/face metadata
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no shadow projection, triangle cache building, or slice drawables — see shadow_lighting_system.md, monolithicStructureGeometry.ts, and buildStructureSlices.ts
+
 import type { StampOverlay } from "../../../map/compile/kenneyMap";
 import { STRUCTURE_TRIANGLE_HEIGHT_STEP_PX } from "../../../structures/monolithicBuildingSemanticPrepass";
 import {

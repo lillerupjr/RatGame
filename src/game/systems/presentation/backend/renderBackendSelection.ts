@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     resolve requested render backend, policy, and fallback reason
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no backend command segmentation or WebGL surface attachment; see renderBackendRouting.ts and webglSurface.ts
+
 import type { RenderSettings } from "../../../../userSettings";
 import type { RenderBackendId } from "./renderBackendCapabilities";
 import type { AttachedWebGLSurface } from "./webglSurface";

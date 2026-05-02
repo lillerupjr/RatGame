@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     activates pending reward tickets, opens progression reward state, and enters REWARD world state
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no ticket scheduling, option rendering, or floor advancement; see rewardSchedulerSystem.ts, ui/rewards/*, and game.ts
+
 import type { World } from "../../../engine/world/world";
 import {
   beginProgressionReward,

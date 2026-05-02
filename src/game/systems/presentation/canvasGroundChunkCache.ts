@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     build, sync, evict, and query authoritative rasterized ground chunk cache entries
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no compiled-map topology, world ordering, or atlas page packing — see map_compilation_activation_floor_topology.md, worldRenderOrdering.ts, and atlasPageBuilder.ts
+
 import type { CompiledKenneyMap, ViewRect } from "../../map/compile/kenneyMap";
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
 import type { RenderCommand } from "./contracts/renderCommands";

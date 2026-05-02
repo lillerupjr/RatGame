@@ -1,9 +1,19 @@
-import type { ResolvedWeaponStats } from "../../../game/combat_mods/stats/combatStatsResolver";
+import {
+  resolveWeaponStats,
+  type ResolvedWeaponStats,
+} from "../../../game/combat_mods/stats/combatStatsResolver";
 import { getCombatModsSnapshot } from "../../../game/combat_mods/debug/combatModsSnapshot";
+import { resolveCombatStarterWeaponId } from "../../../game/combat_mods/content/weapons/characterStarterMap";
+import { getCombatStarterWeaponById } from "../../../game/combat_mods/content/weapons/starterWeapons";
 import { inspectWorldRingProgression } from "../../../game/progression/rings/ringInspection";
 import { getRingDefById, getRingFamilyTalentTreeById } from "../../../game/progression/rings/ringContent";
-import type { FingerSlotId, StoredModifierTokens } from "../../../game/progression/rings/ringTypes";
+import { ensureRingProgressionState, getFingerSlot } from "../../../game/progression/rings/ringState";
+import { collectRingRuntimeEffects } from "../../../game/progression/rings/ringEffects";
+import { collectStatMods } from "../../../game/progression/effects/statMods";
+import type { FingerSlotId, RingProgressionState, StoredModifierTokens } from "../../../game/progression/rings/ringTypes";
 import { describeStatMod } from "../../formatters";
+import { getFamilyColor } from "../pixiTheme";
+import type { StatDelta } from "./statsRail";
 
 export type HandsSlotSnapshot = {
   slotId: FingerSlotId;
@@ -40,24 +50,6 @@ export type HandsScreenSnapshot = {
   storedTokens: StoredModifierTokens;
 };
 
-const FAMILY_COLORS: Record<string, number> = {
-  starter: 0xd4a84a,
-  generic: 0xd4a84a,
-  physical: 0xcc6644,
-  dot: 0x66aa55,
-  chaos: 0x9955cc,
-  poison: 0x44bb66,
-  projectile: 0x5588cc,
-  ignite: 0xdd6633,
-  crit: 0xdd9933,
-  trigger: 0x7777cc,
-  defense: 0x6688aa,
-  utility: 0x88aa66,
-};
-
-function getFamilyColor(familyId: string | null): number {
-  return (familyId && FAMILY_COLORS[familyId]) || 0xd4a84a;
-}
 
 function extractStatModStrings(runtimeEffects: any[]): string[] {
   const result: string[] = [];
@@ -153,5 +145,63 @@ export function buildHandsScreenSnapshot(
     equippedCount: slots.filter((s) => s.equipped).length,
     pendingRingDef,
     storedTokens: inspection.storedModifierTokens,
+  };
+}
+
+/**
+ * Compute a stats delta for a hypothetical ring equip without mutating world state.
+ * Clones the ring progression state, equips the ring in the clone, resolves weapon
+ * stats from the clone's effects, and returns the difference from current stats.
+ */
+export function computeStatsPreviewDelta(
+  world: any,
+  slotId: FingerSlotId,
+  ringDefId: string,
+): StatDelta | null {
+  if (!getRingDefById(ringDefId)) return null;
+
+  // Current stats
+  const currentSnapshot = getCombatModsSnapshot(world);
+  const currentStats = currentSnapshot.weaponStats;
+
+  // Clone the ring progression state
+  const realState = ensureRingProgressionState(world);
+  const clonedState: RingProgressionState = JSON.parse(JSON.stringify(realState));
+
+  // Equip the pending ring in the cloned state
+  const slot = getFingerSlot(clonedState, slotId);
+  if (!slot) return null;
+
+  // Remove existing ring in this slot (if any)
+  if (slot.ringInstanceId) {
+    delete clonedState.ringsByInstanceId[slot.ringInstanceId];
+  }
+
+  // Create a temporary instance
+  const tempInstanceId = "__preview__";
+  clonedState.ringsByInstanceId[tempInstanceId] = {
+    instanceId: tempInstanceId,
+    defId: ringDefId,
+    slotId,
+    allocatedPassivePoints: 0,
+    increasedEffectScalar: 0,
+    unlockedTalentNodeIds: [],
+  };
+  slot.ringInstanceId = tempInstanceId;
+
+  // Resolve weapon stats from the cloned state
+  const clonedEffects = collectRingRuntimeEffects(clonedState);
+  const clonedMods = collectStatMods({ runtimeEffects: clonedEffects });
+  const starterWeaponId = resolveCombatStarterWeaponId(world?.currentCharacterId);
+  const starterWeapon = getCombatStarterWeaponById(starterWeaponId);
+  const previewStats = resolveWeaponStats(starterWeapon, { statMods: clonedMods });
+
+  // Compute deltas
+  return {
+    shotsPerSecond: previewStats.shotsPerSecond - currentStats.shotsPerSecond,
+    critChance: previewStats.critChance - currentStats.critChance,
+    critMulti: previewStats.critMulti - currentStats.critMulti,
+    basePhysical: previewStats.baseDamage.physical - currentStats.baseDamage.physical,
+    chanceToPoison: previewStats.chanceToPoison - currentStats.chanceToPoison,
   };
 }

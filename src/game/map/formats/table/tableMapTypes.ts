@@ -1,4 +1,9 @@
 // src/game/map/tableMapTypes.ts
+// @system   map-compilation/activation/floor-topology
+// @owns     define table and authored map data contracts
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no parsing, compilation, or activation logic; see jsonMapLoader.ts, kenneyMap.ts, and authoredMapActivation.ts
+
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 import type { BuildingPackId } from "../../../content/buildings";
 

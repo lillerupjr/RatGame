@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     generate typed ring, modifier-token, and hand-effect reward options
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no reward ticket scheduling, menu presentation, or ring state mutation; see rewardSchedulerSystem.ts, progressionRewardMenu.ts, and progressionRewardFlow.ts
+
 import { getAllRingDefs, getRingDefById } from "../rings/ringContent";
 import {
   ensureRingProgressionState,

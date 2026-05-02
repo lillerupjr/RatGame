@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     queue delayed explosions and schedule recursive explosion waves
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no zone damage resolution; see zones.ts
+
 import { emitEvent, type World } from "../../../engine/world/world";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import type { DamageMeta } from "../../events";

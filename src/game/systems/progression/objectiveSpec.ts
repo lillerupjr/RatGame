@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     translate typed floor objective specs into table objective definitions
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no runtime objective state, reward payout, or map placement; see objective.ts, zoneObjectiveSystem.ts, and floorObjectiveBinding.ts
+
 import type { ObjectiveDef } from "./objective";
 import type { BossId } from "../../bosses/bossTypes";
 

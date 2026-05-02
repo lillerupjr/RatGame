@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     author, validate, index, and expose ring definitions and family talent trees
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no equipped ring state, reward offers, or runtime effect collection; see ringState.ts, progressionOffers.ts, and ringEffects.ts
+
 import { PRJ_KIND } from "../../factories/projectileFactory";
 import { STAT_KEYS } from "../../combat_mods/stats/statKeys";
 import type {

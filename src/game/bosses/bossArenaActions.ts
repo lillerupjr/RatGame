@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     sequence boss arena actions and sync warning/active tile effects
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no arena geometry construction or player damage ticking; see bossArena.ts and arenaTileEffects.ts
+
 import type { DamageMeta } from "../events";
 import type { World } from "../../engine/world/world";
 import type { BossAbilityId } from "./bossAbilities";

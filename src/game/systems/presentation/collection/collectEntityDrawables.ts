@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     collect entity, projectile, pickup, boss, and VFX drawables with dynamic-atlas lookup
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no entity simulation, atlas page building, or structure slicing — see core_simulation_combat_runtime.md, dynamicAtlasStore.ts, and collectStructureDrawables.ts
+
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
 import { getBossDefinitionForEntity, getBossEncounterForEntity, isBossEntity } from "../../../bosses/bossRuntime";

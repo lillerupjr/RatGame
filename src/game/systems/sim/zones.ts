@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     maintain zone TTL/follow/VFX state and apply scheduled zone damage ticks
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no zone construction or delayed explosion queueing; see zoneFactory.ts and delayedExplosions.ts
+
 import { emitEvent, type World } from "../../../engine/world/world";
 import { isEnemyInCircle } from "./hitDetection";
 import { tickDelayedExplosions } from "./delayedExplosions";

@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     select boss abilities and advance cast phases, handlers, animation requests, and cleanup
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no boss actor spawning, registry data authoring, or per-frame encounter loop; see spawnBossEncounter.ts, bossAbilities.ts, and bossSystem.ts
+
 import { emitEvent, type World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { getUserSettings } from "../../userSettings";

@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     declare canonical render family/form capability matrix
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no live command classification or final release policy; see renderBackendCapabilities.ts and renderFinalBackendMatrix.ts
+
 import { renderCommandAxesKey, type RenderCommand } from "../contracts/renderCommands";
 
 export type RenderCapabilityStatus =

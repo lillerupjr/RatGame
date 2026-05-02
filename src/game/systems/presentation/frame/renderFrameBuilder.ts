@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     enqueue render commands and finalize ordered ground, world, and screen frames
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no command production, backend execution, or atlas lookup — see collection/, renderWorldCreator.ts, and atlas_render_cache_system.md
+
 import type {
   CommandStage,
   RenderCommand,

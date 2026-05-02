@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     collect and scale stat mods from carriers and runtime effects
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no scalar stat pipeline or derived world stat writes; see combatStatsResolver.ts and derivedStats.ts
+
 import type { RuntimeEffect, StatMod } from "./effectTypes";
 
 export type StatModCarrier = {

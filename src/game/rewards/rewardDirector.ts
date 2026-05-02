@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     resolve reward events into concrete reward outcomes
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no presentation scheduling, ticket storage, or vendor purchasing; see rewardPresenterSystem.ts, rewardTickets.ts, and vendorPurchase.ts
+
 import type { FloorRewardBudget } from "./floorRewardBudget";
 
 export type RewardEvent =

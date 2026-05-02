@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     sync and query combined static-structure and dynamic-sprite world atlas pages
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no dual static/dynamic store policy, projected decal atlas, or backend routing — see staticAtlasStore.ts, dynamicAtlasStore.ts, and renderBackendRouting.ts
+
 import { getTileSpriteById } from "../../../engine/render/sprites/renderSprites";
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
 import { buildAtlasPages } from "./atlasPageBuilder";

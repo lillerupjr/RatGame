@@ -1,4 +1,9 @@
 // src/game/factories/projectileFactory.ts
+// @system   core-simulation/combat-runtime
+// @owns     create projectile SoA entries and spawn helpers
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no per-frame motion, collisions, or despawn VFX; see projectiles.ts and projectileLifecycle.ts
+
 import type { World } from "../../engine/world/world";
 import { gridToWorld } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";

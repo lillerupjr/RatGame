@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     spawn rare enemies from rare-zone enter signals
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no objective completion counting or reward payouts; see rareTripleObjectiveSync.ts and rewardDirector.ts
+
 import type { World } from "../../../engine/world/world";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
 import { spawnEnemyGrid, EnemyId } from "../../factories/enemyFactory";

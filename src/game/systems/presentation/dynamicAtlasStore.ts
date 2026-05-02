@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     sync and query dynamic runtime sprite atlas pages by palette variant context
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no static structure/decal atlas, shared atlas mode, or sprite loading internals — see staticAtlasStore.ts, sharedWorldAtlasStore.ts, and renderSprites.ts
+
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
 import { buildAtlasPages } from "./atlasPageBuilder";
 import {

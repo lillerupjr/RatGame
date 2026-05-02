@@ -1,4 +1,9 @@
 // src/game/stats/derivedStats.ts
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     recompute derived player stats from item effects and progression stat mods
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no stat key declarations, ailment ticking, or ring effect collection; see statKeys.ts, ailmentTickSystem.ts, and worldEffects.ts
+
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
 import { STAT_KEYS, type StatKey } from "../combat_mods/stats/statKeys";

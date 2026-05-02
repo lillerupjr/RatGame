@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     resolve camera bootstrap, snapshot override, smoothing, and safe-rect coordinates
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no viewport culling, drawable collection, or app pause/loading transitions — see viewportCulling.ts, collectFrameDrawables.ts, and game_runtime_app_loop.md
+
 import type { World } from "../../../../engine/world/world";
 
 export interface CameraBootstrapInput {

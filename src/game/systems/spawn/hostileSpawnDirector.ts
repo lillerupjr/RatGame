@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     budget deterministic hostile spawns, select pools, scale heat, and snapshot debug state
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no placement execution or enemy factory allocation; see hostileSpawnExecution.ts and enemyFactory.ts
+
 import type { World } from "../../../engine/world/world";
 import { ENEMIES, EnemyId, type EnemyId as EnemyIdType, type EnemySpawnRole } from "../../content/enemies";
 import { isNeutralMonsterId } from "../../content/neutralMonsters";

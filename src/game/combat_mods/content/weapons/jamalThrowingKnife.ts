@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     define the Jamal throwing-knife starter weapon
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no character loadout mapping or projectile spawning; see characterStarterMap.ts and combat.ts
+
 import type { WeaponDef } from "../../stats/modifierTypes";
 import { PRJ_KIND } from "../../../factories/projectileFactory";
 

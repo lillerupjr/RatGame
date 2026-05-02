@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     resolve structure overlay admission context and triangle visibility predicates
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no overlay enumeration, slice building, or render-key creation — see collectStructureOverlays.ts, buildStructureSlices.ts, and buildStructureDrawables.ts
+
 import { type ViewRect, getActiveMap as getActiveCompiledMap } from "../../../map/compile/kenneyMap";
 import { mapWideOverlayViewRect } from "../../../structures/monolithicStructureGeometry";
 import type {

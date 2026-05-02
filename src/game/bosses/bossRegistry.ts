@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     expose boss and boss ability registry lookup helpers
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no boss content authoring or runtime state mutation; see bossDefinitions.ts, bossAbilities.ts, and bossRuntime.ts
+
 import {
   BOSS_ABILITIES,
   type BossAbilityDefinition,

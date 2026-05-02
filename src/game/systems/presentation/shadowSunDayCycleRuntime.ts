@@ -1,3 +1,8 @@
+// @system   shadow-lighting/system
+// @owns     resolve per-world shadow day-cycle runtime state and debug status
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no sun vector math, entity shadows, or heightmap masks — see shadowSunV1.ts, renderShadow.ts, and heightmapShadow/
+
 import type { World } from "../../../engine/world/world";
 import { formatShadowSunTimeLabel } from "../../../shadowSunV1";
 import {

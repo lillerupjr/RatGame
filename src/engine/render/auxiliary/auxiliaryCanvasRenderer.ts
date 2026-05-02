@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     execute Canvas2D world, screen, background, shadow, and auxiliary render commands
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no drawable collection, sorting, atlas sync, or sun-time authority — see collectFrameDrawables.ts, worldRenderOrdering.ts, atlas_render_cache_system.md, and shadow_lighting_system.md
+
 import { configurePixelPerfect, snapPx } from "../pixelPerfect";
 import { drawVoidBackgroundOnce } from "../../../game/systems/presentation/frame/backgroundPass";
 import { drawTexturedQuad } from "../../../game/systems/presentation/renderPrimitives/drawTexturedQuad";

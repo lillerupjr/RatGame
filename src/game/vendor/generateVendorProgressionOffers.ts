@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     generate and price vendor progression offers
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no purchase mutation or shop UI; see vendorPurchase.ts
+
 import { generateProgressionOffers } from "../progression/rewards/progressionOffers";
 import { getVendorOfferPriceG } from "./pricing";
 import type { VendorProgressionOffer } from "./vendorState";

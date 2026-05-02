@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     build read-only ring progression inspection snapshots
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no ring mutation or Pixi hands rendering; see ringState.ts and handsScreen.ts
+
 import type { RuntimeEffect } from "../effects/effectTypes";
 import {
   getRingDefById,

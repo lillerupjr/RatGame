@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     execute hostile spawn requests and update spawn debug counters
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no budget selection or placement sampling; see hostileSpawnDirector.ts and spawn.ts
+
 import type { World } from "../../../engine/world/world";
 import { ENEMIES } from "../../content/enemies";
 import { spawnOneEnemyOfType } from "./spawn";

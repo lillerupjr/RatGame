@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     drive non-boss enemy state transitions and ability windup decisions
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no ability effect execution or movement; see actions.ts and movement.ts
+
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { type EnemyAbilityConfig, EnemyId } from "../../content/enemies";

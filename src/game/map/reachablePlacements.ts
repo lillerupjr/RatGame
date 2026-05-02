@@ -1,3 +1,8 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     collect active-map reachability and pick spaced reachable tiles
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no map compilation or enemy spawn execution; see kenneyMap.ts and spawn.ts
+
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { getActiveMap } from "./authoredMapActivation";
 import { walkInfo } from "./compile/kenneyMap";

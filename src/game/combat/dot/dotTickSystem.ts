@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     dispatch fixed-cadence ailment, zone, and beam DOT ticks
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no individual DOT effect math; see ailmentTickSystem.ts, zones.ts, and beamCombat.ts
+
 import type { World } from "../../../engine/world/world";
 import { DOT_TICK_INTERVAL_SEC } from "./dotConstants";
 import { tickAilmentsOnce } from "../../combat_mods/systems/ailmentTickSystem";
@@ -14,4 +19,3 @@ export function dotTickSystem(w: World, dt: number): void {
     tickBeamContactsOnce(w, DOT_TICK_INTERVAL_SEC);
   }
 }
-

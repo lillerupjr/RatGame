@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     collect ready and pending dynamic image sources for runtime atlas builds
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no atlas packing, static structure inventory, or sprite load policy — see atlasPageBuilder.ts, staticStructureSpriteInventory.ts, and renderSprites.ts
+
 import { getSpriteByIdForVariantKey } from "../../../engine/render/sprites/renderSprites";
 import { listPlayerDynamicAtlasSpriteIds } from "../../../engine/render/sprites/playerSprites";
 import { listEnemyDynamicAtlasSpriteIds } from "../../../engine/render/sprites/enemySprites";

@@ -1,4 +1,9 @@
 // Auto-generated registry of authored JSON maps (semantic + legacy).
+// @system   map-compilation/activation/floor-topology
+// @owns     build eager authored JSON map registry and id lookup helpers
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no JSON schema parsing or map activation; see jsonMapLoader.ts and authoredMapActivation.ts
+
 import type { TableMapDef } from "../formats/table/tableMapTypes";
 import { loadTableMapDefFromJson } from "../formats/json/jsonMapLoader";
 

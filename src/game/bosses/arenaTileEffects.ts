@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     upsert, remove, tick, and apply boss arena tile effects
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no arena pattern generation or cast sequencing; see bossArenaPatterns.ts and bossArenaActions.ts
+
 import { emitEvent, type World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { getPlayerWorld } from "../coords/worldViews";

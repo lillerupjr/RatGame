@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     captures objective, rare, survive, and chest facts into deduped durable run events
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no reward planning, ticket presentation, or objective state mutation; see rewardSchedulerSystem.ts, rewardPresenterSystem.ts, and objective.ts
+
 import type { World } from "../../../engine/world/world";
 import { enqueueRunEvent } from "../../rewards/runEvents";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";

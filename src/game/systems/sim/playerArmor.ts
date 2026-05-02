@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     clamp armor, restore armor, and absorb incoming player damage
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no HP mutation or hit events; see combat.ts, actions.ts, and zones.ts
+
 import type { World } from "../../../engine/world/world";
 
 function finiteOrZero(v: number | undefined): number {

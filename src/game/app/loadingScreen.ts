@@ -1,3 +1,8 @@
+// @system   game-runtime/app-loop
+// @owns     paint the canvas loading screen and progress bar
+// @doc      docs/canonical/game_runtime_app_loop.md
+// @agents   no asset loading orchestration or runtime state transitions; see loadingFlow.ts and appState.ts
+
 export function renderLoadingScreen(
   ctx: CanvasRenderingContext2D,
   progress: number,

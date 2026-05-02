@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     collect, scale, and snapshot combat-rule runtime effects
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no trigger action execution or weapon stat resolution; see triggeredEffects.ts and combatStatsResolver.ts
+
 import { collectWorldRingRuntimeEffects } from "../rings/ringEffects";
 import type {
   CombatRuleDef,

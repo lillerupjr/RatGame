@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     despawn projectiles and emit projectile hit VFX
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no projectile spawning or collision tests; see projectileFactory.ts and hitDetection.ts
+
 import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getProjectileWorld } from "../../coords/worldViews";

@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     resolve enemy split stage, visual scale, and hit-height helpers
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no enemy definitions or spawn budgeting; see enemies.ts and hostileSpawnDirector.ts
+
 import type { World } from "../../../engine/world/world";
 
 export const SPLITTER_STAGE_VISUAL_SCALES = [1, 0.5, 0.25] as const;

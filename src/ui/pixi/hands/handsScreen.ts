@@ -20,7 +20,7 @@ import type { StatDelta } from "./statsRail";
 import { getRingDefById, getAllRingDefs } from "../../../game/progression/rings/ringContent";
 import { equipRing } from "../../../game/progression/rings/ringState";
 import type { FingerSlotId, ModifierTokenType } from "../../../game/progression/rings/ringTypes";
-import { COLORS } from "../pixiTheme";
+import { COLORS, getFamilyColor } from "../pixiTheme";
 import { DebugSlotTuner } from "./debugSlotTuner";
 import { getSlotConfigs, generateDynamicSlotConfigs } from "./ringSlotConfig";
 import { RingSlotView } from "./ringSlot";
@@ -201,6 +201,7 @@ export async function mountHandsScreen(
       description: pr.description,
       statMods: pr.statMods,
       mode: "choose-slot",
+      familyColor: getFamilyColor(pr.familyId),
       replacingRingName,
     });
   }
@@ -244,6 +245,10 @@ export async function mountHandsScreen(
     if (!snapshot || !nodes) return;
 
     // Update ring slot visuals
+    const pendingFamilyColor = state.mode === "choose-slot" && snapshot.pendingRingDef
+      ? getFamilyColor(snapshot.pendingRingDef.familyId)
+      : undefined;
+
     for (const sv of nodes.slotViews) {
       const slotSnap = snapshot.slots.find((s) => s.slotId === sv.slotId);
       const equipped = !!slotSnap?.equipped;
@@ -259,6 +264,7 @@ export async function mountHandsScreen(
         mode: state.mode,
         ringName: slotSnap?.ringName,
         empowermentScalar: slotSnap?.empowermentScalar ?? 0,
+        pendingFamilyColor,
       });
     }
 
@@ -290,6 +296,7 @@ export async function mountHandsScreen(
             description: slotSnap.description ?? "",
             statMods: slotSnap.statMods,
             mode: "selected",
+            familyColor: slotSnap.familyColor,
             slotId: slotSnap.slotId,
             instanceId: slotSnap.instanceId,
             levelUpTokens: snapshot.storedTokens.LEVEL_UP,
@@ -315,6 +322,9 @@ export async function mountHandsScreen(
     // Acquisition banner
     nodes.acquisitionBanner.visible = state.mode === "choose-slot";
     if (state.mode === "choose-slot") {
+      if (pendingFamilyColor != null) {
+        nodes.acquisitionBanner.setColor(pendingFamilyColor);
+      }
       animateBanner(true);
     }
   }

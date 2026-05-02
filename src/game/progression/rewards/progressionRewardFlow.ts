@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     open, validate, apply, and clear progression reward choices
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no reward ticket scheduling or option UI rendering; see rewardSchedulerSystem.ts and progressionRewardMenu.ts
+
 import { recomputeDerivedStats } from "../../stats/derivedStats";
 import {
   applyHandEffect,

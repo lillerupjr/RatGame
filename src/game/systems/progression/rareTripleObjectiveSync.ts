@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     synchronize rare-zone kill signals into rare-triple objective state
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no rare spawn placement or reward payouts; see rareZoneSpawn.ts and rewardDirector.ts
+
 import { EnemyId } from "../../content/enemies";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
 

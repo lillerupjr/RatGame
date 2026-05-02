@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     provide height-aware enemy, player, and projectile hit predicates
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no damage application or death finalization; see combat.ts and finalize.ts
+
 import { type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import {

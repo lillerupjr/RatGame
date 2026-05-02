@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     build runtime structure slice pieces, direct fallbacks, and debug geometry payloads
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no semantic prepass, merged-slice cache storage, or final render ordering — see monolithicBuildingSemanticPrepass.ts, structureMergedSliceCache.ts, and worldRenderOrdering.ts
+
 import {
   runtimeStructureTriangleGeometrySignatureForOverlay,
   buildMonolithicStructureTriangleCacheForOverlay,

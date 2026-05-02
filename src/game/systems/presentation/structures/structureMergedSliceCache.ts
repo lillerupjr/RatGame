@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     build and validate merged structure-slice raster cache entries by geometry and source frame
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no slice generation, triangle semantics, or atlas page packing — see buildStructureSlices.ts, structureTriangleSemantics.ts, and atlasPageBuilder.ts
+
 import type { RawCacheMetricSample } from "../cacheMetricsRegistry";
 import { drawTexturedQuad } from "../renderPrimitives/drawTexturedQuad";
 import { markStableTextureSource, setTextureDebugLabel } from "../stableTextureSource";

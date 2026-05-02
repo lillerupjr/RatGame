@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     sample valid around-player hostile spawn placements
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no spawn budget selection or actor initialization; see hostileSpawnDirector.ts and enemyFactory.ts
+
 import { type World } from "../../../engine/world/world";
 import { walkInfo } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";

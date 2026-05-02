@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     load, cache, palette-remap, prewarm, and expose render sprite records
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no atlas packing, render ordering, or palette setting storage — see atlas_render_cache_system.md, worldRenderOrdering.ts, and settings_overrides_debug_controls.md
+
 import {
     getActiveMapSkinId,
     resolveMapSkin,

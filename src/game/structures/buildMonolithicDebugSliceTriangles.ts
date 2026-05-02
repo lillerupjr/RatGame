@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     generate zig-zag slice triangle strips and alpha-cull diagnostic geometry
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no semantic prepass cache, runtime grouping, or render debug drawing — see monolithicBuildingSemanticPrepass.ts, monolithicStructureGeometry.ts, and buildStructureSlices.ts
+
 import type { StructureSliceBand } from "./getStructureSlices";
 
 export type MonolithicSliceEdgeSide = "L" | "R";

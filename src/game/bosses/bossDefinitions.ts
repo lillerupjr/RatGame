@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     author boss definitions, stats, presentation, movement, loadouts, and UI metadata
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no ability definitions or runtime encounter mutation; see bossAbilities.ts and bossRuntime.ts
+
 import { BossAbilityId } from "./bossAbilities";
 import { BossId, type BossDefinition } from "./bossTypes";
 

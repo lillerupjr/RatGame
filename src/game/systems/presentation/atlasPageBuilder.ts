@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     pack ready image sources into atlas canvas pages with safe borders and frames
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no source collection, store invalidation, or render submission — see dynamicAtlasSources.ts, atlas stores, and renderWorldConsumers.ts
+
 import { markStableTextureSource, setTextureDebugLabel } from "./stableTextureSource";
 
 export type AtlasImageSource = HTMLImageElement | HTMLCanvasElement;

@@ -8,6 +8,11 @@
  * Produces a shadow mask (Float32Array) where 0 = lit, 1 = fully shadowed.
  */
 
+// @system   shadow-lighting/system
+// @owns     compute and cache screen-space heightmap shadow masks by explicit frame keys
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no height-buffer compositing or sun runtime state — see sceneHeightBuffer.ts and shadowSunDayCycleRuntime.ts
+
 import type { ShadowSunV1Model } from "../../../../shadowSunV1";
 import type { SceneHeightBuffer } from "./sceneHeightBuffer";
 

@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     defines pickup kinds, spawn helpers, vacuum/magnet movement, anchor sync, and chest special-case dispatch
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no kill-to-drop conversion, XP grant collection loop, or reward presentation; see drops.ts, economy/xp.ts, and rewardPresenterSystem.ts
+
 import { World } from "../../../engine/world/world";
 import type { DropId } from "../../content/drops";
 import { gridToWorld } from "../../coords/grid";

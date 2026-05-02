@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     define ailment kinds, stack instances, caps, tick interval, and durations
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no stack mutation or ticking; see enemyAilments.ts and ailmentTickSystem.ts
+
 import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
 
 export type AilmentKind = "bleed" | "ignite" | "poison";

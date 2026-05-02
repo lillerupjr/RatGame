@@ -10,6 +10,11 @@
  * (via the HEIGHTMAP_ENABLED_PREFIXES manifest).
  */
 
+// @system   shadow-lighting/system
+// @owns     map sprite ids to heightmap assets and cache heightmap image data
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no ray marching, scene compositing, or sprite color loading — see heightmapShadow/ and renderSprites.ts
+
 export type HeightmapData = {
   width: number;
   height: number;

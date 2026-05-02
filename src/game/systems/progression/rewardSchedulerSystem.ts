@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     drains run events into claim keys, immediate gold/token grants, and queued reward tickets
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no run-event capture, reward UI opening, or option application; see rewardRunEventProducerSystem.ts, rewardPresenterSystem.ts, and progression/rewards/*
+
 import type { World } from "../../../engine/world/world";
 import { addGold } from "../../economy/gold";
 import { OBJECTIVE_COMPLETION_GOLD, type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";

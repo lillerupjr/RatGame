@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     update beam targeting, contact DOT ticks, and beam hit/death events
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no beam geometry primitives or projectile lifecycle; see beamShared.ts and projectileLifecycle.ts
+
 import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";

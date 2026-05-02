@@ -131,3 +131,23 @@ export const TEXT_STYLES = {
 } as const;
 
 export type TextPresetName = keyof typeof TEXT_STYLES;
+
+// ── Ring family colors ──────────────────────────────────────────────────────
+export const FAMILY_COLORS: Record<string, number> = {
+  starter: 0xd4a84a,
+  generic: 0xd4a84a,
+  physical: 0xcc6644,
+  dot: 0x66aa55,
+  chaos: 0x9955cc,
+  poison: 0x44bb66,
+  projectile: 0x5588cc,
+  ignite: 0xdd6633,
+  crit: 0xdd9933,
+  trigger: 0x7777cc,
+  defense: 0x6688aa,
+  utility: 0x88aa66,
+};
+
+export function getFamilyColor(familyId: string | null): number {
+  return (familyId && FAMILY_COLORS[familyId]) || 0xd4a84a;
+}

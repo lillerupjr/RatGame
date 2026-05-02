@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     map playable characters to starter weapon ids
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no starter ring mapping or weapon stat definitions; see characterStarterRingMap.ts and starterWeapons.ts
+
 import type { PlayableCharacterId } from "../../../content/playableCharacters";
 import type { CombatStarterWeaponId } from "./starterWeapons";
 

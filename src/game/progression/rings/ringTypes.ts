@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     define ring families, hand slots, tokens, ring instances, and progression state types
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no ring content registry or state mutation; see ringContent.ts and ringState.ts
+
 import type { EffectDef } from "../effects/effectTypes";
 
 export const RING_FAMILY_IDS = [

@@ -1,3 +1,8 @@
+// @system   ring-progression/system
+// @owns     process player combat events into ring-triggered projectiles, explosions, armor, and ignite effects
+// @doc      docs/canonical/ring_progression_system.md
+// @agents   no trigger effect authoring or base collision/death routing; see ringContent.ts, collisions.ts, and finalize.ts
+
 import type { World } from "../../../engine/world/world";
 import { emitEvent } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";

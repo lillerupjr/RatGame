@@ -12,6 +12,7 @@ export type DrawerContent = {
   description: string;
   statMods: string[];
   mode: HandsMode;
+  familyColor?: number;
   replacingRingName?: string | null;
   // Token info (selected mode)
   levelUpTokens?: number;
@@ -94,7 +95,7 @@ export class DetailDrawer extends Container {
     let yPos = 0;
 
     // Top accent line — gradient from accent to transparent
-    const accentColor = content.mode === "choose-slot" ? COLORS.green : COLORS.gold;
+    const accentColor = content.familyColor ?? (content.mode === "choose-slot" ? COLORS.green : COLORS.gold);
     const accent = new Graphics();
     // Draw a 2px accent line with gradient effect (solid left -> fading right)
     accent.rect(-SPACING.xxl, -SPACING.xl, this.width_ * 0.6, 2).fill({
@@ -114,7 +115,8 @@ export class DetailDrawer extends Container {
 
     // Family tag
     const familyStyle = TEXT_STYLES.ringFamily.clone();
-    familyStyle.fill = COLORS.gold;
+    const tagColor = content.familyColor ?? COLORS.gold;
+    familyStyle.fill = tagColor;
     const familyTag = new Text({
       text: content.familyId.toUpperCase(),
       style: familyStyle,
@@ -125,7 +127,7 @@ export class DetailDrawer extends Container {
     const tagBorder = new Graphics();
     tagBorder
       .roundRect(familyTag.x - 4, yPos + 2, familyTag.width + 8, 18, 2)
-      .stroke({ color: COLORS.gold, alpha: 0.3, width: 1 });
+      .stroke({ color: tagColor, alpha: 0.3, width: 1 });
     this.contentContainer.addChild(tagBorder);
     this.contentContainer.addChild(familyTag);
     yPos += 28;

@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     tick boss encounters, activation checks, cooldowns, and cast dispatch
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no boss registry data or actor spawning; see bossRegistry.ts and spawnBossEncounter.ts
+
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";

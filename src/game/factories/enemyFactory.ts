@@ -1,4 +1,9 @@
 // src/game/factories/enemyFactory.ts
+// @system   hostile-ai/spawn-runtime
+// @owns     scale enemy spawn stats and hand off to hostile actor creation
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no generic hostile SoA allocation or spawn budgeting; see hostileActorFactory.ts and hostileSpawnDirector.ts
+
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
 import { EnemyId } from "../content/enemies";

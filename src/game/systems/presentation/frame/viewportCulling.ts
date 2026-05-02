@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     build viewport rectangles, tile bounds, culling predicates, and south-wedge tests
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no camera smoothing, map compilation, or drawable emission — see cameraBootstrap.ts, map_compilation_activation_floor_topology.md, and collection/
+
 export type ScreenRect = { minX: number; maxX: number; minY: number; maxY: number };
 export type TileBounds = { minTx: number; maxTx: number; minTy: number; maxTy: number };
 export type CullingView = { screenRect: ScreenRect; tileBounds: TileBounds };

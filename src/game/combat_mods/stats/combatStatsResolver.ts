@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     resolve weapon and DOT stats from typed modifiers and runtime effects
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no ring state mutation, projectile simulation, or ailment ticking; see ringState.ts, projectiles.ts, and ailmentTickSystem.ts
+
 import { STAT_KEYS, type StatKey } from "./statKeys";
 import type { ModifierDef, DamageBundle, StatMod, WeaponDef } from "./modifierTypes";
 import { applyConversionPriorityFill } from "../damage/conversion";

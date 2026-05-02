@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     submit prepared world pieces to Canvas2D, WebGL, and dynamic Canvas fallback paths
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no semantic collection, atlas selection, or render-piece creation — see collection/, atlas_render_cache_system.md, and renderWorldCreator.ts
+
 import type { ViewRect } from "../../../game/map/compile/kenneyMap";
 import type { RenderFrameContext } from "../../../game/systems/presentation/contracts/renderFrameContext";
 import { resolveRenderZBand } from "../../../game/systems/presentation/worldRenderOrdering";

@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     remap canvas pixel colors by hue-locked palette anchors and remap weights
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no active palette selection, sprite loading, or persisted settings — see activePalette.ts, renderSprites.ts, and settings_overrides_debug_controls.md
+
 import { hsvToRgb, hueDistanceDegrees, rgbToHsv } from "./colorMath";
 import { getPaletteHsvAnchors, type PaletteHsvAnchor } from "./palettes";
 

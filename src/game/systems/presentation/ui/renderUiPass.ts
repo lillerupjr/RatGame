@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     draw final overlay UI for nav arrows, debug grids, DPS meter, and death FX
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no screen-overlay command enqueueing or world render submission — see renderScreenOverlays.ts and renderWorldConsumers.ts
+
 import type { UiPassContext } from "../contracts/uiPassContext";
 
 export function renderUiPass(input: UiPassContext): void {

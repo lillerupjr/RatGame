@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     declare typed stat key vocabulary for combat, DOT, conversion, globals, and defense
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no resolver behavior or ring stat-mod collection; see combatStatsResolver.ts and statMods.ts
+
 export const STAT_KEYS = {
   // Damage flat adds
   DAMAGE_ADD_PHYSICAL: "damage.add.physical",

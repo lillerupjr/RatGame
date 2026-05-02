@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     compare render keys, classify pass kinds, and resolve world z-band ordering
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no command payloads, drawable collection, or backend execution — see renderCommands.ts, collection/, and renderWorldConsumers.ts
+
 /** Semantic layer ordering for world renderer tie-breaks. */
 export enum KindOrder {
   FLOOR = 0,

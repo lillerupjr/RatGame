@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     allocate hostile actor SoA fields and baseline components
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no enemy selection or AI behavior; see enemyFactory.ts and behavior.ts
+
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { anchorFromWorld } from "../coords/anchor";

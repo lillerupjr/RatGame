@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     register, sample, classify, and reset render cache metric sources
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no cache eviction policy, render perf counters, or atlas building — see cache owners, renderPerfCounters.ts, and atlasPageBuilder.ts
+
 export type CacheMetricKind = "asset" | "derived" | "scene" | "debug" | "unknown";
 export type CacheMetricStatus = "stable" | "growing" | "warning" | "unknown";
 

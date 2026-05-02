@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     define boss ids, definitions, cast runtime, arena effect, and encounter state contracts
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no authored boss data or cast phase execution; see bossDefinitions.ts and bossAbilityRunner.ts
+
 import type { DamageMeta } from "../events";
 import type { EnemyAiType } from "../content/enemies";
 import type {

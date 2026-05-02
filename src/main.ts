@@ -31,6 +31,7 @@ import { getUserSettings, initUserSettings, updateUserSettings } from "./userSet
 import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
 import { mountHandsScreen, type HandsScreenController } from "./ui/pixi/hands/handsScreen";
+import { computeStatsPreviewDelta } from "./ui/pixi/hands/handsDataBridge";
 import { mountSettingsPanel } from "./ui/settings/settingsPanel";
 import { installDevToolsPanel } from "./ui/devTools/devToolsPanel";
 import { installStandaloneViewportFix } from "./game/app/viewportSizing";
@@ -246,6 +247,9 @@ async function bootstrap() {
         },
         onApplyToken: (instanceId, tokenType) => {
           game.handsScreenApplyToken(instanceId, tokenType);
+        },
+        computeStatsPreview: (slotId, ringDefId) => {
+          return computeStatsPreviewDelta(game.getWorld(), slotId, ringDefId);
         },
       });
       if (import.meta.env.DEV) console.log("[hands-screen] mounted successfully");

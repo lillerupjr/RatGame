@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     define enemy ids, typed enemy configs, and enemy definitions
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no spawning, AI stepping, or boss definitions; see enemyFactory.ts, behavior.ts, and bossRegistry.ts
+
 import { PRJ_KIND } from "../factories/projectileFactory";
 import type {
     HostileBodyConfig,

@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     manage boss runtime state, encounter registry, lookup, activation, and defeat marking
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no boss spawning or ability phase execution; see spawnBossEncounter.ts and bossAbilityRunner.ts
+
 import type { World } from "../../engine/world/world";
 import { EnemyId } from "../content/enemies";
 import { BossAbilityId as BossAbilityIds, type BossAbilityId } from "./bossAbilities";

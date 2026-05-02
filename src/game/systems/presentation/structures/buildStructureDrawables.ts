@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     convert structure slice pieces into drawable payloads with parent-tile render keys
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no slice construction, triangle-cache building, or backend submission — see buildStructureSlices.ts, monolithicStructureGeometry.ts, and renderWorldConsumers.ts
+
 import { deriveParentTileRenderFields } from "../../../structures/monolithicStructureGeometry";
 import { KindOrder, type RenderKey } from "../worldRenderOrdering";
 import type {

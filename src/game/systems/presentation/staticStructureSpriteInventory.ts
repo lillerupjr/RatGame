@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     enumerate unique static structure sprite ids from active compiled-map overlays
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no atlas packing, map compilation, or runtime triangle cache building — see atlasPageBuilder.ts, map_compilation_activation_floor_topology.md, and monolithicStructureGeometry.ts
+
 import {
   facePieceLayers,
   facePiecesInViewForLayer,

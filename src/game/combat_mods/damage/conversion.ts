@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     apply centralized priority-fill damage conversion
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no weapon stat grouping or collision damage packets; see combatStatsResolver.ts and collisions.ts
+
 import type { DamageBundle } from "../stats/modifierTypes";
 
 export interface ConversionRates {

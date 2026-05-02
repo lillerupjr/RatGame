@@ -6,6 +6,11 @@
 // Supports cylinder-cylinder collision (entities), cylinder-box collision (tiles),
 // and efficient spatial queries.
 
+// @system   core-simulation/combat-runtime
+// @owns     provide shared 3D collision, raycast, and map collision helpers
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no movement system integration or projectile spawning; see movement.ts and projectileFactory.ts
+
 import { World } from "../../../engine/world/world";
 import { Vector3D, v3, v3Add, v3Sub, v3Normalize, v3Mag, v3MagSq } from "../../math/Vector3D";
 import { BoundingBox3D, bb3, bb3FromCircle, bb3Intersects, bb3Penetration, bb3ClosestPoint } from "../../math/BoundingBox3D";

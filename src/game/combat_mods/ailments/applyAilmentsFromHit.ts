@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     convert resolved hit damage, chances, and rolls into ailment stacks
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no projectile collision resolution or DOT ticking; see collisions.ts and ailmentTickSystem.ts
+
 import {
   addBleed,
   addPoison,

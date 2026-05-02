@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     instantiate shared presentation cache and atlas stores and register their metrics
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no cache policies, atlas packing, or render command ordering — see cache owners, atlasPageBuilder.ts, and presentation_rendering_pipeline.md
+
 import { RuntimeStructureTriangleCacheStore } from "../../structures/monolithicStructureGeometry";
 import { CanvasGroundChunkCacheStore } from "./canvasGroundChunkCache";
 import { registerCacheMetricSource } from "./cacheMetricsRegistry";

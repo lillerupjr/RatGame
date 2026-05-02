@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     define boss ability ids, typed ability contracts, and authored ability data
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no cast phase execution or boss registry lookup; see bossAbilityRunner.ts and bossRegistry.ts
+
 import type { ArenaActionSpec } from "./bossArenaTypes";
 import { ArenaPatternKind } from "./bossArenaTypes";
 import { AnimatedSurfaceId } from "../content/animatedSurfaceRegistry";

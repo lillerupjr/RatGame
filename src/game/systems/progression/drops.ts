@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     converts kill events into gold/xp pickup drops and handles physical pickup collection side effects
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no pickup vacuum motion, reward ticket scheduling, or combat kill finalization; see pickups.ts, rewardSchedulerSystem.ts, and enemies/finalize.ts
+
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getBossDefinitionForEntity, isBossEntity } from "../../bosses/bossRuntime";

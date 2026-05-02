@@ -1,3 +1,8 @@
+// @system   ui-shell/menus-runtime-panels
+// @owns     look up and validate static DOM references for HUD, menus, map, dialog, and overlays
+// @doc      docs/canonical/ui_shell_menus_runtime_panels.md
+// @agents   no menu behavior, settings persistence, or game-state mutation — see menuWiring.ts, settings_overrides_debug_controls.md, and game.ts
+
 type EndRefs = {
     root: HTMLDivElement;
     title: HTMLDivElement;

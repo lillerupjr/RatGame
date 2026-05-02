@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     collect ground surface/decal commands while honoring ground-chunk cache authority
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no cache construction, entity collection, or final frame sorting — see canvasGroundChunkCache.ts, collectEntityDrawables.ts, and renderFrameBuilder.ts
+
 import {
   buildFlatTileDestinationQuad,
   buildGroundDecalProjectedSurfacePayload,

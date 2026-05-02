@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     build playable boss arena grids from active-map topology
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no arena pattern sequencing or hazard damage ticks; see bossArenaPatterns.ts and arenaTileEffects.ts
+
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import type { World } from "../../engine/world/world";
 import { getEnemyWorld } from "../coords/worldViews";

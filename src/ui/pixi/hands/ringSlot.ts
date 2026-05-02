@@ -23,6 +23,7 @@ export type RingSlotVisualState = {
   mode: HandsMode;
   ringName?: string | null;
   empowermentScalar?: number;
+  pendingFamilyColor?: number;
 };
 
 export class RingSlotView extends Container {
@@ -237,7 +238,7 @@ export class RingSlotView extends Container {
     let fillAlpha: number;
 
     if (mode === "choose-slot") {
-      color = COLORS.green;
+      color = this._visualState.pendingFamilyColor ?? COLORS.green;
       strokeOuter = 0.85;
       strokeInner = 0.35;
       dotAlpha = 0.9;
@@ -310,8 +311,9 @@ export class RingSlotView extends Container {
     const padY = 4;
     const w = label.width + padX * 2;
     const h = label.height + padY * 2;
+    const borderColor = vs.equipped ? vs.familyColor : COLORS.border;
     bg.roundRect(-w / 2, 0, w, h, 3).fill({ color: COLORS.bgPanel, alpha: 0.92 });
-    bg.roundRect(-w / 2, 0, w, h, 3).stroke({ color: COLORS.border, width: 1, alpha: 0.5 });
+    bg.roundRect(-w / 2, 0, w, h, 3).stroke({ color: borderColor, width: 1, alpha: 0.5 });
   }
 
   /** Call each frame for pulse/float animations. */

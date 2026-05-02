@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     define the Hobo syringe starter weapon
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no character loadout mapping or resolver math; see characterStarterMap.ts and combatStatsResolver.ts
+
 import type { WeaponDef } from "../../stats/modifierTypes";
 import { PRJ_KIND } from "../../../factories/projectileFactory";
 

@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     classify ordered render commands into WebGL/Canvas backend segments and stats
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no backend policy selection or actual drawing submission; see renderBackendSelection.ts and renderWorldConsumers.ts
+
 import type { RenderCommand } from "../contracts/renderCommands";
 import {
   commandAxesKey,

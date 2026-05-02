@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     collect admitted structure overlay candidates and stable south tie-break metadata
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no admission rules, slice construction, or render command enqueueing — see structureOverlayAdmission.ts, buildStructureSlices.ts, and collectStructureDrawables.ts
+
 import { overlaysInView, type StampOverlay } from "../../../map/compile/kenneyMap";
 import type {
   StructureOverlayCandidate,

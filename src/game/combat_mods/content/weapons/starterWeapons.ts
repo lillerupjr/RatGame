@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     register starter weapon definitions and resolve them by id
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no character-to-weapon mapping or stat resolution; see characterStarterMap.ts and combatStatsResolver.ts
+
 import type { WeaponDef } from "../../stats/modifierTypes";
 import { HOBO_SYRINGE_V1 } from "./hoboSyringe";
 import { JACK_PISTOL_V1 } from "./jackPistol";

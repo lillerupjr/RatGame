@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     declare final backend classification and release-default signoff matrix
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no live command routing or capability lookup; see renderBackendRouting.ts and renderCapabilityMatrix.ts
+
 import type { RenderBackendId } from "./renderBackendCapabilities";
 
 export type FinalBackendClassification =

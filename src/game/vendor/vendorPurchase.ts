@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     validate vendor purchases, spend gold, and apply progression options
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no offer generation or shop UI; see generateVendorProgressionOffers.ts
+
 import { addGold, getGold } from "../economy/gold";
 import { applyProgressionRewardOption } from "../progression/rewards/progressionRewardFlow";
 

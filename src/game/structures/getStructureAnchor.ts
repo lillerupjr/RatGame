@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     derive monolithic structure anchor and occupied alpha bounds from an alpha map
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no slice bands, triangle strips, or runtime cache grouping — see getStructureSlices.ts, buildMonolithicDebugSliceTriangles.ts, and monolithicStructureGeometry.ts
+
 export type StructureSliceDebugAlphaMap = {
   width: number;
   height: number;

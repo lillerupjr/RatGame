@@ -1,3 +1,8 @@
+// @system   presentation/rendering
+// @owns     resolve active palette id, remap weights, and palette variant cache keys
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no palette pixel remapping, settings persistence, or atlas invalidation — see paletteSwap.ts, settings_overrides_debug_controls.md, and atlas_render_cache_system.md
+
 import { normalizePaletteRemapWeightPercent } from "../../debugSettings";
 import { getUserSettings } from "../../userSettings";
 import { getActiveMapSkinPaletteEntry, getActiveMapSkinPaletteId } from "../content/mapSkins";

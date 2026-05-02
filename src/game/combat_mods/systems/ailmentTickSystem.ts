@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     fixed-tick enemy ailments, emit DOT damage events, and finalize DOT deaths
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no ailment application from hits or zone/beam ticks; see applyAilmentsFromHit.ts, zones.ts, and beamCombat.ts
+
 import { createEnemyAilmentsState, tickEnemyAilments } from "../ailments/enemyAilments";
 import { AILMENT_TICK_INTERVAL_SEC } from "../ailments/ailmentTypes";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";

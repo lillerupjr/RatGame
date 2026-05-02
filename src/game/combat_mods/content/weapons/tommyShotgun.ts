@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     define the Tommy shotgun starter weapon
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no character loadout mapping or projectile fan spawning; see characterStarterMap.ts and combat.ts
+
 import type { WeaponDef } from "../../stats/modifierTypes";
 
 export const TOMMY_SHOTGUN_V1: WeaponDef = {

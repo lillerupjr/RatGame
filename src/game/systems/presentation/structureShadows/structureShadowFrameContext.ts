@@ -1,3 +1,8 @@
+// @system   shadow-lighting/system
+// @owns     build frame shadow context from sun timing, overrides, and routing metadata
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no triangle slicing or shadow raster implementation — see structures/ and structureShadowVersionRouting.ts
+
 import { buildShadowSunV1StepKeySuffix, getShadowSunV1LightingState } from "../../../../shadowSunV1";
 import type {
   StructureShadowFrameInputs,

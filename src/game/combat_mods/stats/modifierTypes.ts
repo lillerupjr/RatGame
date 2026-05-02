@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     define modifier, weapon, damage bundle, tag, and beam stat contracts
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no stat key vocabulary or resolver math; see statKeys.ts and combatStatsResolver.ts
+
 import type { StatMod } from "../../progression/effects/effectTypes";
 
 export type { ModOp, StatMod } from "../../progression/effects/effectTypes";

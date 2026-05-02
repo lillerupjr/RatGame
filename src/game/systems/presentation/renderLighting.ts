@@ -1,3 +1,8 @@
+// @system   shadow-lighting/system
+// @owns     resolve light scaling and draw final ambient darkness/tint overlay
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no sun model, heightmap mask generation, or render ordering — see shadowSunV1.ts, heightmapShadow/, and presentation_rendering_pipeline.md
+
 import { configurePixelPerfect } from "../../../engine/render/pixelPerfect";
 
 export type ProjectedLight = {

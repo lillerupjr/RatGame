@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     generate alternating monolithic slice bands around a structure anchor
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no alpha anchor extraction, triangle generation, or drawable conversion — see getStructureAnchor.ts, buildMonolithicDebugSliceTriangles.ts, and buildStructureDrawables.ts
+
 export type StructureSliceBand = {
   x: number;
   width: number;

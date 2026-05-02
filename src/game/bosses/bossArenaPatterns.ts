@@ -1,3 +1,8 @@
+// @system   boss-encounter/system
+// @owns     generate boss arena checkerboard, snake, and inward-collapse patterns
+// @doc      docs/canonical/boss_encounter_system.md
+// @agents   no arena construction or hazard effect syncing; see bossArena.ts and bossArenaActions.ts
+
 import type { ArenaCell, BossArena } from "./bossArena";
 import { collectPlayableArenaCells, isBossArenaCellPlayable } from "./bossArena";
 import {

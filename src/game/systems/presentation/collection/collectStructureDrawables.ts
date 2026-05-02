@@ -1,3 +1,8 @@
+// @system   atlas/render-cache
+// @owns     collect structure drawables with static/shared atlas lookup and merged-slice cache reuse
+// @doc      docs/canonical/atlas_render_cache_system.md
+// @agents   no triangle-cache construction, slice generation, or backend submission — see monolithicStructureGeometry.ts, buildStructureSlices.ts, and renderWorldConsumers.ts
+
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
 import {

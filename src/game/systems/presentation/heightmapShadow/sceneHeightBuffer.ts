@@ -8,6 +8,11 @@
  * This buffer is the input for the ray march shadow pass.
  */
 
+// @system   shadow-lighting/system
+// @owns     composite visible structure heightmaps into a screen-space height buffer
+// @doc      docs/canonical/shadow_lighting_system.md
+// @agents   no heightmap loading or ray-march occlusion — see heightmapLoader.ts and heightmapRayMarch.ts
+
 import type { HeightmapData } from "../../../../engine/render/sprites/heightmapLoader";
 
 export type SceneHeightBuffer = {

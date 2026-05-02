@@ -1,3 +1,8 @@
+// @system   combat-mods/stat-resolution-loadout-effects
+// @owns     define the Joey laser starter weapon
+// @doc      docs/canonical/combat_mods_stat_resolution_loadout_effects.md
+// @agents   no character loadout mapping or beam runtime ticks; see characterStarterMap.ts and beamCombat.ts
+
 import type { WeaponDef } from "../../stats/modifierTypes";
 
 export const JOEY_RIFLE_V1: WeaponDef = {

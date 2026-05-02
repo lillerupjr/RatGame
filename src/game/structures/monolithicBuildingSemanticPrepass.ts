@@ -1,3 +1,8 @@
+// @system   structure-geometry/slicing
+// @owns     compute, cache, validate, and expose monolithic building semantic placement geometry
+// @doc      docs/canonical/structure_geometry_slicing_system.md
+// @agents   no runtime draw collection, shadow masks, or atlas storage — see presentation/structures/, shadow_lighting_system.md, and atlas_render_cache_system.md
+
 import { getTileSpriteById } from "../../engine/render/sprites/renderSprites";
 import {
   LOAD_PROFILER_SUBPHASE,

@@ -1,4 +1,8 @@
 // src/game/systems/progression/outcomeSystem.ts
+// @system   progression/objectives/rewards
+// @owns     applies objective outcome handlers and clears resolved objective events
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no normal floor advancement, reward gating, or objective counting; see game.ts, rewardPresenterSystem.ts, and objective.ts
 
 import type { World } from "../../../engine/world/world";
 import type { OutcomeDef } from "./objective";

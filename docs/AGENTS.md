@@ -164,3 +164,31 @@ When a contract file is introduced:
 - Execute one section at a time; stop after each and wait for `next`
 - Mark section achievements in the contract after completion
 - Update this file if any rule here is affected
+
+---
+
+## 12. File headers
+
+Every source file that is a Key Entrypoint of a canonical system carries a 4-line `@agent` header block immediately before its first import.
+
+```ts
+// @system   <system/subsystem>
+// @owns     <what this specific file owns — verb-first, file-specific>
+// @doc      <relative path to canonical doc>
+// @agents   <what is NOT here and where to find it instead>
+```
+
+**Reading rules:**
+- Read the header before reading the file body
+- If `@agents` says what you need is elsewhere — close the file, go there
+- Do not read the full file to confirm what the header already states
+
+**Writing rules:**
+- `@owns` must reflect what the file actually does, not just what the doc says it should do
+- `@agents` must name specific alternative files or docs, not generic redirections
+- Headers are updated in the same patch as any ownership change
+- If a file has no header and you are editing it, add one before submitting the change
+
+**Drift:**
+- A header that contradicts the canonical doc is drift — report it, do not work around it
+- A header that contradicts the file body is drift — report it, do not work around it

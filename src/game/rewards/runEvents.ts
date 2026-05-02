@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     defines durable run-event union and world-backed enqueue/shift/query helpers
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no fact capture, reward planning, or ticket lifecycle; see rewardRunEventProducerSystem.ts, rewardSchedulerSystem.ts, and rewardTickets.ts
+
 export type RunEvent =
   | {
       type: "ZONE_CLEARED";

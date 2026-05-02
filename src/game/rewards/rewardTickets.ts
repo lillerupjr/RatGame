@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     defines reward ticket and claim-key queues, ticket activation, resolution, and lookup helpers
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no run-event capture, reward planning, or reward UI opening; see rewardRunEventProducerSystem.ts, rewardSchedulerSystem.ts, and rewardPresenterSystem.ts
+
 import type { ProgressionRewardFamily } from "../progression/rewards/rewardFamilies";
 
 export type RewardTicketSource = "FLOOR_COMPLETION" | "BOSS_CHEST" | "SIDE_OBJECTIVE" | "LEVEL_UP";

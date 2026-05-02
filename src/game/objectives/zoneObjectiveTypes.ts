@@ -1,3 +1,8 @@
+// @system   progression/objectives/rewards
+// @owns     define zone objective runtime types and tile containment helper
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no runtime objective updates or reward events; see zoneObjectiveSystem.ts and rewardDirector.ts
+
 export type ZoneObjective = {
   id: number;
   tileX: number;

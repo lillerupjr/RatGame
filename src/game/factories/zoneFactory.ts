@@ -1,4 +1,9 @@
 // src/game/factories/zoneFactory.ts
+// @system   core-simulation/combat-runtime
+// @owns     create zone SoA entries from world and grid coordinates
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no zone ticking, damage, or VFX updates; see zones.ts
+
 import type { World } from "../../engine/world/world";
 import { gridToWorld } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";

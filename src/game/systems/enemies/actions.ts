@@ -1,3 +1,8 @@
+// @system   hostile-ai/spawn-runtime
+// @owns     execute non-boss enemy projectile, explosion, and leap ability effects
+// @doc      docs/canonical/hostile_ai_spawn_runtime.md
+// @agents   no state selection or boss casting; see behavior.ts and bossSystem.ts
+
 import type { World } from "../../../engine/world/world";
 import { emitEvent } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";

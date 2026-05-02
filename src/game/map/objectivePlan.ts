@@ -1,3 +1,8 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     map floor archetypes to objective ids and objective specs
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no objective runtime state or map compilation; see objective.ts and kenneyMap.ts
+
 import type { FloorArchetype } from "./floorArchetype";
 import type { ObjectiveSpec } from "../systems/progression/objectiveSpec";
 import type { BossId } from "../bosses/bossTypes";
