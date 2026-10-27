@@ -143,12 +143,12 @@ Subsystem ownership:
 
 ## 10. Progression
 
-The run progression model is ring-first. Rings, stored ring modifier tokens, and immediate hand effects are the only progression families.
+The run progression model is ring-first. Rings are the only progression family. Rings have no per-ring upgrade layer (no modifier tokens, passive points, or talent/boon trees), and hands have a fixed 8-slot topology (no add-finger or finger-empowerment effects).
 
 - New progression behavior must be implemented under `src/game/progression/`
 - Rings own build identity — no parallel relic or draft reward system may be introduced
 - Reward generation and vendor offers must consume typed progression options, not string payloads
-- Hand structure changes are owned by ring progression state, not ad hoc stat modifiers
+- Hand topology is owned by ring progression state, not ad hoc stat modifiers
 - Triggered ring effects must execute through the centralized progression trigger dispatcher
 - Passive ring effects are applied through centralized progression runtime effects
 

@@ -13,7 +13,6 @@ type EndRefs = {
     kills: HTMLElement;
     gold: HTMLElement;
     rings: HTMLElement;
-    tokens: HTMLElement;
 };
 
 type MapRefs = {
@@ -22,7 +21,6 @@ type MapRefs = {
     backBtn: HTMLButtonElement;
     title: HTMLDivElement;
     infoPanel: HTMLDivElement;
-    depthLabel: HTMLDivElement;
     sub: HTMLDivElement;
     graphWrap: HTMLDivElement;
     graphContent: HTMLDivElement;
@@ -130,12 +128,10 @@ export type DomRefs = {
     endStatKills: HTMLElement;
     endStatGold: HTMLElement;
     endStatRings: HTMLElement;
-    endStatTokens: HTMLElement;
     mapRoot: HTMLDivElement;
     mapTopBar: HTMLDivElement;
     mapRouteBackBtn: HTMLButtonElement;
     mapInfoPanel: HTMLDivElement;
-    mapDepthLabel: HTMLDivElement;
     mapSub: HTMLDivElement;
     mapGraphWrap: HTMLDivElement;
     mapGraphContent: HTMLDivElement;
@@ -282,14 +278,12 @@ export function getDomRefs(): DomRefs {
     const endStatKills = getEl<HTMLElement>("endStatKills");
     const endStatGold = getEl<HTMLElement>("endStatGold");
     const endStatRings = getEl<HTMLElement>("endStatRings");
-    const endStatTokens = getEl<HTMLElement>("endStatTokens");
 
     const mapRoot = getEl<HTMLDivElement>("map");
     const mapTopBar = getEl<HTMLDivElement>("mapTopBar");
     const mapRouteBackBtn = getEl<HTMLButtonElement>("routeBackBtn");
     const mapTitle = getEl<HTMLDivElement>("mapTitle");
     const mapInfoPanel = getEl<HTMLDivElement>("mapInfoPanel");
-    const mapDepthLabel = getEl<HTMLDivElement>("mapDepthLabel");
     const mapSub = getEl<HTMLDivElement>("mapSub");
     const mapGraphWrap = getEl<HTMLDivElement>("mapGraphWrap");
     const mapGraphContent = getEl<HTMLDivElement>("mapGraphContent");
@@ -345,7 +339,6 @@ export function getDomRefs(): DomRefs {
             kills: endStatKills,
             gold: endStatGold,
             rings: endStatRings,
-            tokens: endStatTokens,
         },
         mapEl: {
             root: mapRoot,
@@ -353,7 +346,6 @@ export function getDomRefs(): DomRefs {
             backBtn: mapRouteBackBtn,
             title: mapTitle,
             infoPanel: mapInfoPanel,
-            depthLabel: mapDepthLabel,
             sub: mapSub,
             graphWrap: mapGraphWrap,
             graphContent: mapGraphContent,
@@ -417,12 +409,10 @@ export function getDomRefs(): DomRefs {
         endStatKills,
         endStatGold,
         endStatRings,
-        endStatTokens,
         mapRoot,
         mapTopBar,
         mapRouteBackBtn,
         mapInfoPanel,
-        mapDepthLabel,
         mapSub,
         mapGraphWrap,
         mapGraphContent,

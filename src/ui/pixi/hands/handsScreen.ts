@@ -19,17 +19,16 @@ import {
 import type { StatDelta } from "./statsRail";
 import { getRingDefById, getAllRingDefs } from "../../../game/progression/rings/ringContent";
 import { equipRing } from "../../../game/progression/rings/ringState";
-import type { FingerSlotId, ModifierTokenType } from "../../../game/progression/rings/ringTypes";
+import type { FingerSlotId } from "../../../game/progression/rings/ringTypes";
 import { COLORS, getFamilyColor } from "../pixiTheme";
 import { DebugSlotTuner } from "./debugSlotTuner";
-import { getSlotConfigs, generateDynamicSlotConfigs } from "./ringSlotConfig";
+import { getSlotConfigs } from "./ringSlotConfig";
 import { RingSlotView } from "./ringSlot";
 
 export type HandsScreenCallbacks = {
   onEquipToSlot: (slotId: FingerSlotId) => void;
   onClose: () => void;
   onUnequip: (slotId: FingerSlotId) => void;
-  onApplyToken: (instanceId: string, tokenType: ModifierTokenType) => void;
   /** Compute stats-preview delta for a hypothetical equip. Returns null if not supported. */
   computeStatsPreview?: (slotId: FingerSlotId, ringDefId: string) => StatDelta | null;
 };
@@ -74,12 +73,6 @@ export async function mountHandsScreen(
       callbacks.onUnequip(slotId);
       refreshSnapshot();
       dispatch({ type: "UNEQUIP_RING", slotId });
-    },
-    onApplyToken: (instanceId, tokenType) => {
-      callbacks.onApplyToken(instanceId, tokenType);
-      refreshSnapshot();
-      // Re-apply state to update drawer content with new token counts
-      applyState();
     },
   });
 
@@ -217,25 +210,6 @@ export async function mountHandsScreen(
     nodes.statsRail.update(snapshot, delta);
   }
 
-  // Sync dynamic slot count to match snapshot
-  function syncDynamicSlots(): void {
-    if (!snapshot) return;
-    const totalSlots = snapshot.slots.length;
-    if (totalSlots <= nodes.slotViews.length) return;
-
-    // Generate configs for additional slots
-    const dynamicConfigs = generateDynamicSlotConfigs(totalSlots);
-    for (let i = nodes.slotViews.length; i < totalSlots; i++) {
-      const config = dynamicConfigs[i];
-      if (!config) continue;
-      const sv = new RingSlotView(config);
-      sv.positionOnHands(nodes.layout.handsW, nodes.layout.handsH);
-      wireSlotEvents(sv);
-      nodes.slotViews.push(sv);
-      nodes.slotsContainer.addChild(sv);
-    }
-  }
-
   // ── State management ──
   function dispatch(action: HandsAction): void {
     state = transition(state, action);
@@ -264,7 +238,6 @@ export async function mountHandsScreen(
         isSelected: state.selectedSlotId === sv.slotId,
         mode: state.mode,
         ringName: slotSnap?.ringName,
-        empowermentScalar: slotSnap?.empowermentScalar ?? 0,
         pendingFamilyColor,
       });
     }
@@ -300,11 +273,6 @@ export async function mountHandsScreen(
             familyColor: slotSnap.familyColor,
             slotId: slotSnap.slotId,
             instanceId: slotSnap.instanceId,
-            levelUpTokens: snapshot.storedTokens.LEVEL_UP,
-            effectTokens: snapshot.storedTokens.INCREASED_EFFECT_20,
-            unlockedTalentCount: slotSnap.unlockedTalentCount,
-            totalTalentCount: slotSnap.totalTalentCount,
-            availablePassivePoints: slotSnap.availablePassivePoints,
           });
         }
       } else {
@@ -473,7 +441,6 @@ export async function mountHandsScreen(
       showPixiCanvas();
       app.resize();
       relayoutScene(nodes);
-      syncDynamicSlots();
       applyState();
 
       // Play entrance animation

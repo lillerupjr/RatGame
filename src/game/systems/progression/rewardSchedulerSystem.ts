@@ -1,13 +1,12 @@
 // @system   progression/objectives/rewards
-// @owns     drains run events into claim keys, immediate gold/token grants, and queued reward tickets
+// @owns     drains run events into claim keys, immediate gold grants, and queued reward tickets
 // @doc      docs/canonical/progression_objectives_rewards.md
 // @agents   no run-event capture, reward UI opening, or option application; see rewardRunEventProducerSystem.ts, rewardPresenterSystem.ts, and progression/rewards/*
 
 import type { World } from "../../../engine/world/world";
 import { addGold } from "../../economy/gold";
 import { OBJECTIVE_COMPLETION_GOLD, type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";
-import { defaultRewardFamilyForDepth, type ProgressionRewardFamily } from "../../progression/rewards/rewardFamilies";
-import { grantModifierToken } from "../../progression/rings/ringState";
+import type { ProgressionRewardFamily } from "../../progression/rewards/rewardFamilies";
 import { type RunEvent, shiftRunEvent } from "../../rewards/runEvents";
 import {
   addRewardClaimKey,
@@ -61,7 +60,6 @@ function rewardPlanForRunEvent(
   outcome: RewardOutcome;
   ticketSource: RewardTicketSource;
   progressionFamily?: ProgressionRewardFamily;
-  grantLevelUpToken?: boolean;
   bonusGoldAmount: number;
 } {
   const depth = floorMapDepthForRewards(world);
@@ -100,16 +98,14 @@ function rewardPlanForRunEvent(
       return {
         outcome: handleRewardEvent(world.floorRewardBudget, { type: "OBJECTIVE_COMPLETED" }, { depth }),
         ticketSource: "FLOOR_COMPLETION",
-        progressionFamily: world.currentFloorIntent?.rewardFamily ?? defaultRewardFamilyForDepth(depth),
+        progressionFamily: world.currentFloorIntent?.rewardFamily ?? "RING",
         bonusGoldAmount: OBJECTIVE_COMPLETION_GOLD,
       };
 
     case "LEVEL_UP":
       return {
-        outcome: { type: "NO_REWARD", reason: `Level ${ev.level} grants ring level-up token` },
+        outcome: { type: "NO_REWARD", reason: `Level ${ev.level} grants no progression reward` },
         ticketSource: "LEVEL_UP",
-        progressionFamily: "RING_MODIFIER_TOKEN",
-        grantLevelUpToken: true,
         bonusGoldAmount: 0,
       };
 
@@ -173,11 +169,6 @@ export function rewardSchedulerSystem(world: World): void {
       addGold(world, plan.bonusGoldAmount);
     }
 
-    if (plan.grantLevelUpToken) {
-      grantModifierToken(world, "LEVEL_UP");
-      continue;
-    }
-
     if (plan.outcome.type === "GRANT_GOLD") {
       addGold(world, plan.outcome.amount);
       continue;
@@ -189,7 +180,7 @@ export function rewardSchedulerSystem(world: World): void {
 
     enqueueRewardTicket(world, {
       claimKey,
-      family: plan.progressionFamily ?? defaultRewardFamilyForDepth(floorMapDepthForRewards(world)),
+      family: plan.progressionFamily ?? "RING",
       source: plan.ticketSource,
       optionCount: DEFAULT_OPTION_COUNT,
     });

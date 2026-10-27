@@ -6,11 +6,11 @@ import { getCombatModsSnapshot } from "../../../game/combat_mods/debug/combatMod
 import { resolveCombatStarterWeaponId } from "../../../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../../../game/combat_mods/content/weapons/starterWeapons";
 import { inspectWorldRingProgression } from "../../../game/progression/rings/ringInspection";
-import { getRingDefById, getRingFamilyTalentTreeById } from "../../../game/progression/rings/ringContent";
+import { getRingDefById } from "../../../game/progression/rings/ringContent";
 import { ensureRingProgressionState, getFingerSlot } from "../../../game/progression/rings/ringState";
 import { collectRingRuntimeEffects } from "../../../game/progression/rings/ringEffects";
 import { collectStatMods } from "../../../game/progression/effects/statMods";
-import type { FingerSlotId, RingProgressionState, StoredModifierTokens } from "../../../game/progression/rings/ringTypes";
+import type { FingerSlotId, RingProgressionState } from "../../../game/progression/rings/ringTypes";
 import { describeStatMod } from "../../formatters";
 import { getFamilyColor } from "../pixiTheme";
 import type { StatDelta } from "./statsRail";
@@ -27,11 +27,6 @@ export type HandsSlotSnapshot = {
   description: string | null;
   statMods: string[];
   familyColor: number;
-  allocatedPassivePoints: number;
-  availablePassivePoints: number;
-  unlockedTalentCount: number;
-  totalTalentCount: number;
-  empowermentScalar: number;
 };
 
 export type PendingRingDef = {
@@ -47,7 +42,6 @@ export type HandsScreenSnapshot = {
   stats: ResolvedWeaponStats;
   equippedCount: number;
   pendingRingDef: PendingRingDef | null;
-  storedTokens: StoredModifierTokens;
 };
 
 
@@ -80,18 +74,7 @@ export function buildHandsScreenSnapshot(
     for (const slot of hand.slots) {
       const ringEntry = inspection.rings.find((r) => r.instance.slotId === slot.slotId);
       const def = ringEntry ? getRingDefById(ringEntry.instance.defId) : null;
-      const tree = def ? getRingFamilyTalentTreeById(def.familyId) : undefined;
 
-      // Compute talent/passive point info
-      const allocatedPassivePoints = ringEntry?.instance.allocatedPassivePoints ?? 0;
-      const unlockedTalentCount = ringEntry?.unlockedNodes.length ?? 0;
-      // spentPassivePoints = sum of costs of unlocked nodes
-      let spentPoints = 0;
-      if (ringEntry) {
-        for (const node of ringEntry.unlockedNodes) {
-          spentPoints += node.cost;
-        }
-      }
 
       slots.push({
         slotId: slot.slotId,
@@ -105,11 +88,6 @@ export function buildHandsScreenSnapshot(
         description: def?.description ?? null,
         statMods: ringEntry ? extractStatModStrings(ringEntry.runtimeEffects) : [],
         familyColor: getFamilyColor(def?.familyId ?? null),
-        allocatedPassivePoints,
-        availablePassivePoints: allocatedPassivePoints - spentPoints,
-        unlockedTalentCount,
-        totalTalentCount: tree?.nodes.length ?? 0,
-        empowermentScalar: slot.empowermentScalar,
       });
     }
   }
@@ -144,7 +122,6 @@ export function buildHandsScreenSnapshot(
     stats: combatSnapshot.weaponStats,
     equippedCount: slots.filter((s) => s.equipped).length,
     pendingRingDef,
-    storedTokens: inspection.storedModifierTokens,
   };
 }
 
@@ -183,9 +160,6 @@ export function computeStatsPreviewDelta(
     instanceId: tempInstanceId,
     defId: ringDefId,
     slotId,
-    allocatedPassivePoints: 0,
-    increasedEffectScalar: 0,
-    unlockedTalentNodeIds: [],
   };
   slot.ringInstanceId = tempInstanceId;
 

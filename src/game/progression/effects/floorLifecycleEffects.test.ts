@@ -51,10 +51,10 @@ describe("floor lifecycle effects", () => {
     expect(world.playerHp).toBe(100);
   });
 
-  test("scales floor recovery with increased ring effect", () => {
+  test("scales floor recovery with neighbor amplification", () => {
     const world = stubWorld();
-    const instance = equipRing(world, "RING_HEALTH_FLOOR_RECOVERY", "LEFT:0");
-    instance.increasedEffectScalar = 0.5;
+    equipRing(world, "RING_HEALTH_FLOOR_RECOVERY", "LEFT:0");
+    equipRing(world, "RING_UTILITY_AMPLIFYING_BAND", "LEFT:1");
 
     applyFloorLifecycleEffects(world, "FLOOR_COMPLETE");
 

@@ -39,10 +39,10 @@ describe("world progression effects", () => {
     expectSingleGlobalDamageIncreased(world, 0.15);
   });
 
-  test("scales dynamic stat modifiers with increased ring effect", () => {
+  test("scales dynamic stat modifiers with neighbor amplification", () => {
     const world = stubWorld({ playerHpMax: 100 });
-    const instance = equipRing(world, "RING_HEALTH_VITAL_FORCE", "LEFT:0");
-    instance.increasedEffectScalar = 0.5;
+    equipRing(world, "RING_HEALTH_VITAL_FORCE", "LEFT:0");
+    equipRing(world, "RING_UTILITY_AMPLIFYING_BAND", "LEFT:1");
 
     expectSingleGlobalDamageIncreased(world, 0.3);
   });

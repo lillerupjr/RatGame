@@ -48,11 +48,11 @@ Own the typed combat-rules layer that turns weapon definitions, starter loadouts
 
 1. **Starter Loadout**: run start sets `currentCharacterId`; starter weapon lookup resolves through `resolveCombatStarterWeaponId(...)` and `getCombatStarterWeaponById(...)`. Starter ring installation is owned by ring progression (`equipStarterRingForCharacter(...)`) and contributes runtime effects through the same ring-effect path as other rings.
 2. **Weapon Stats**: `resolveWeaponStats(...)` groups `StatMod[]` by `StatKey`, resolves `(base + add) * (1 + inc) * more * less`, applies base weapon damage, flat adds, `applyConversionPriorityFill(...)`, generic damage increased/more scaling, and projectile-only hit damage scaling for projectile fire modes. Output is pre-crit damage plus crit chance/multi, projectile count, pierce, and projectile bounce count.
-3. **Ring Effects / Globals**: `ensureRingProgressionState(...)` normalizes hand, slot, ring-instance, and stored-token state. Ring definitions and unlocked ring talent nodes produce `RuntimeEffect[]`; `collectWorldStatMods(...)` turns static and dynamic effects into typed stat mods, including health-context damage scaling from maximum life and missing life. `recomputeDerivedStats(...)` runs after ring/effect mutations and every `RUN` frame, producing `w.dmgMult`, `w.fireRateMult`, `w.pSpeed`, `w.playerHpMax`, `w.maxArmor`, and `w.momentumMax` from item effects, ring progression effects, and HP/momentum context.
+3. **Ring Effects / Globals**: `ensureRingProgressionState(...)` normalizes hand, slot, and ring-instance state. Equipped ring definitions produce `RuntimeEffect[]`; `collectWorldStatMods(...)` turns static and dynamic effects into typed stat mods, including health-context damage scaling from maximum life and missing life. `recomputeDerivedStats(...)` runs after ring/effect mutations and every `RUN` frame, producing `w.dmgMult`, `w.fireRateMult`, `w.pSpeed`, `w.playerHpMax`, `w.maxArmor`, and `w.momentumMax` from item effects, ring progression effects, and HP/momentum context.
 4. **Live Firing**: `combatSystem(...)` resolves current starter weapon/stat mods, then applies sidecars outside the resolver: `w.dmgMult`, `w.fireRateMult`, debug multipliers, momentum full-crit doubling, starter effects such as Lucky Chamber, and ring-owned weapon-fire rules such as Backfire Shot. Projectiles serialize damage components, crit, ailments, bounce count, pierce count state, and `damageMeta`; beam weapons reuse base damage as beam DPS payload and do not consume backfire projectile rules.
 5. **Hit / Ailments**: `collisionsSystem(...)` resolves crit with `resolveCritRoll01(...)` and `resolveProjectileDamagePacket(...)`. Ring combat-rule sidecars can scale no-pierce nearby projectile hits, scale projectile hits by previously consumed pierce, scale physical hit payloads, and suppress final non-physical hit payloads. Ring-trigger sidecars can alter dealt hit payload through the centralized progression trigger/effect path, including bounded direct chain hits. `applyAilmentsFromHit(...)` derives bleed/ignite/poison stacks from resolved dealt damage plus ailment chances; extra poison payloads may be added, but global hit multipliers are not reapplied.
 6. **DOT Path**: `enemyAilments.ts` owns stacked poison/bleed/ignite duration and caps. `ailmentTickSystem(...)` fixed-ticks DOT with resist/damage reduction, emits DOT `ENEMY_HIT`, and finalizes deaths; `beamCombat.ts` uses the same scalar model. Live DOT consumers currently call `resolveDotStats({ mods: [] })`; DOT `StatMod` keys are defined but not fully threaded into live runtime.
-7. **Reward -> Progression Option**: `generateProgressionOffers(...)` produces base typed ring, ring-modifier-token, or hand-effect options. Ring options are selected from non-starter authored rings by tier-weighted rolls and carry both `rolledTier` and `authoredTier` for minimal debug visibility. `beginProgressionReward(...)` uses active reward generation that can apply equipped ring reward rules for option count, family bias, and floor-completion rerolls; vendor purchases use `applyProgressionRewardOption(...)` and vendor inventory stays on the base generator.
+7. **Reward -> Progression Option**: `generateProgressionOffers(...)` produces base typed ring options. Ring options are selected from non-starter authored rings by tier-weighted rolls and carry both `rolledTier` and `authoredTier` for minimal debug visibility. `beginProgressionReward(...)` uses active reward generation that can apply equipped ring reward rules for option count, family bias, and floor-completion rerolls; vendor purchases use `applyProgressionRewardOption(...)` and vendor inventory stays on the base generator.
 
 ## Invariants
 
@@ -63,18 +63,18 @@ Own the typed combat-rules layer that turns weapon definitions, starter loadouts
 - Projectile bounce stats resolve as non-negative integer bounce counts and are applied when player weapon projectiles are spawned.
 - Weapon-fire rules can add player projectile sidecars after weapon stat resolution; beam weapons ignore projectile sidecar rules unless a future contract says otherwise.
 - Conditional combat rules that suppress non-physical hit damage run after hit payload scaling and win over fire/chaos/chaos-conversion outputs.
-- `world.progression` is the ring progression state; ring writes flow through `ringState.ts`: `equipRing(...)`, `unequipRing(...)`, `applyModifierTokenToRing(...)`, `applyHandEffect(...)`.
+- `world.progression` is the ring progression state; ring writes flow through `ringState.ts`: `equipRing(...)`, `unequipRing(...)`.
 - Starter rings are installed through `equipStarterRingForCharacter(...)`.
 - `recomputeDerivedStats(...)` owns passive world-level outputs such as `w.dmgMult`, `w.fireRateMult`, `w.playerHpMax`, `w.maxArmor`.
 - Ailment stacks cap at `20`; base durations: ignite `4s`, poison `2s`, bleed `6s`.
 - Ailment damage is derived from resolved hit damage at application, then mitigated at tick time.
-- Reward options are typed by `ProgressionRewardFamily`; ring options, modifier tokens, and hand effects apply through the same progression reward flow.
+- Reward options are typed by `ProgressionRewardFamily` (currently only `RING`); ring options apply through the progression reward flow.
 - Generated ring rewards exclude starter-family rings; starter rings remain installed only through starter loadout wiring.
 
 ## Constraints
 
 - New combat stats must extend `STAT_KEYS`, resolver behavior, and every live consumer that needs the output.
-- Direct writes to `world.progression` bypass normalization, slot occupancy, token handling, and derived-stat recompute.
+- Direct writes to `world.progression` bypass normalization, slot occupancy, and derived-stat recompute.
 - Character loadout behavior must stay in starter weapon and starter ring mapping helpers, not unrelated systems.
 - Conversion stays centralized in `applyConversionPriorityFill(...)`.
 - DOT creation must use already-resolved dealt damage; reapplying global hit multipliers is a bug.

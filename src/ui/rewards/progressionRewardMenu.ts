@@ -1,18 +1,10 @@
 import {
   type ProgressionRewardState,
 } from "../../game/progression/rewards/progressionRewardFlow";
-import { progressionRewardOptionView, type RingRewardOption } from "../../game/progression/rewards/progressionOffers";
-import { rewardFamilyLabel } from "../../game/progression/rewards/rewardFamilies";
+import { progressionRewardOptionView } from "../../game/progression/rewards/progressionOffers";
 import { createTapSafeActivator } from "../interaction/tapSafeActivate";
 
 const OVERLAY_ENTRY_SHIELD_MS = 300;
-
-function sourceLabel(source: string): string {
-  if (source === "BOSS_CHEST") return "Boss Chest";
-  if (source === "LEVEL_UP") return "Ring Token";
-  if (source === "SIDE_OBJECTIVE") return "Side Objective";
-  return "Floor Complete";
-}
 
 export function mountProgressionRewardMenu(args: {
   root: HTMLElement;
@@ -45,12 +37,6 @@ export function mountProgressionRewardMenu(args: {
       title.className = "title";
       panel.appendChild(title);
     }
-    let sub = panel.querySelector(".sub") as HTMLElement | null;
-    if (!sub) {
-      sub = document.createElement("div");
-      sub.className = "sub";
-      panel.appendChild(sub);
-    }
     let actions = panel.querySelector(".rewardActionRow") as HTMLElement | null;
     if (!actions) {
       actions = document.createElement("div");
@@ -63,7 +49,7 @@ export function mountProgressionRewardMenu(args: {
       panel.appendChild(choices);
     }
     choices.className = "deckCardGrid";
-    return { title, sub, actions, choices };
+    return { title, actions, choices };
   };
 
   const render = (state: ProgressionRewardState | null): void => {
@@ -75,9 +61,8 @@ export function mountProgressionRewardMenu(args: {
     }
     if (!wasActive) entryShieldUntilMs = Date.now() + OVERLAY_ENTRY_SHIELD_MS;
 
-    const { title, sub, actions, choices } = ensureStructure();
-    title.textContent = `Choose a ${rewardFamilyLabel(currentState.family)} Reward`;
-    sub.textContent = `Pick 1 reward (${sourceLabel(currentState.source)})`;
+    const { title, actions, choices } = ensureStructure();
+    title.textContent = "Choose reward";
     actions.innerHTML = "";
     if (currentState.family === "RING" && currentState.rerollsRemaining > 0) {
       const reroll = document.createElement("button");
@@ -96,43 +81,16 @@ export function mountProgressionRewardMenu(args: {
       btn.className = "deckCardButton rarity-3";
       btn.dataset.progressionRewardId = option.id;
 
-      const top = document.createElement("div");
-      top.className = "deckCardTopRow";
-      const family = document.createElement("span");
-      family.className = "deckCardTier";
-      family.textContent = rewardFamilyLabel(view.family);
-      const slot = document.createElement("span");
-      slot.className = "deckCardRarity";
-      slot.textContent = "V1";
-      top.appendChild(family);
-      top.appendChild(slot);
-
       const name = document.createElement("div");
       name.className = "deckCardTitle";
       name.textContent = view.title;
 
-      const subtitle = document.createElement("div");
-      subtitle.className = "deckCardSub";
-      subtitle.textContent = view.subtitle;
-
-      btn.appendChild(top);
       btn.appendChild(name);
-      btn.appendChild(subtitle);
       if (view.description) {
         const desc = document.createElement("div");
         desc.className = "deckCardDesc";
         desc.textContent = view.description;
         btn.appendChild(desc);
-      }
-      if (import.meta.env.DEV) {
-        const debug = document.createElement("div");
-        debug.className = "deckCardDebug";
-        if (view.rolledTier || view.authoredTier) {
-          debug.textContent = `rolled:${view.rolledTier ?? "–"} authored:${view.authoredTier ?? "–"} ${option.family === "RING" ? (option as RingRewardOption).ringDefId : ""}`;
-        } else {
-          debug.textContent = option.id;
-        }
-        btn.appendChild(debug);
       }
       tapSafe.bindActivate(btn, () => args.onPick(option.id));
       choices.appendChild(btn);

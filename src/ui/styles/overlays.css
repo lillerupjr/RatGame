@@ -225,8 +225,7 @@ html.ios-standalone-fix #ui {
   gap: 8px;
 }
 
-.pauseOwnedTier,
-.pauseOwnedStack {
+.pauseOwnedTier {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2937,10 +2936,6 @@ html.ios-standalone-fix #ui {
   backdrop-filter: blur(3px);
 }
 
-.boonOverlay {
-  z-index: 12;
-}
-
 .deckOverlay .panel {
   width: min(980px, 100%);
   max-width: 100%;
@@ -4257,7 +4252,7 @@ html.ios-standalone-fix #ui {
   border: 0;
   padding: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   background:
     radial-gradient(100% 80% at 50% 20%, rgba(255, 218, 150, 0.06), transparent 55%),
     linear-gradient(180deg, rgba(11, 17, 29, 0.96), rgba(14, 22, 37, 0.98));
@@ -4332,58 +4327,6 @@ html.ios-standalone-fix #ui {
 #map.routeMode .routeSubMessage {
   white-space: pre-line;
 }
-
-#map.routeMode .routeLegend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-#map.routeMode .routeLegendChip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(228, 217, 186, 0.14);
-  background: rgba(255, 247, 224, 0.04);
-  color: rgba(239, 229, 202, 0.86);
-  font: 700 10px var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-#map.routeMode .routeLegendChip--available {
-  border-color: rgba(122, 210, 255, 0.34);
-  color: rgba(188, 233, 255, 0.96);
-}
-
-#map.routeMode .routeLegendChip--visited {
-  border-color: rgba(237, 197, 116, 0.34);
-  color: rgba(250, 223, 164, 0.95);
-}
-
-#map.routeMode .routeLegendChip--future {
-  border-color: rgba(155, 169, 194, 0.18);
-  color: rgba(192, 203, 225, 0.76);
-}
-
-
-#map.routeMode #mapDepthLabel {
-  justify-self: start;
-  margin: 10px 0 0 18px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(214, 190, 144, 0.24);
-  background: linear-gradient(180deg, rgba(43, 50, 66, 0.88), rgba(29, 35, 48, 0.92));
-  color: rgba(249, 232, 195, 0.92);
-  font: 800 12px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
-  z-index: 2;
-}
-
 #map.routeMode #mapGraphWrap,
 #map.routeMode.delveFull #mapGraphWrap {
   position: relative;
@@ -4565,17 +4508,6 @@ html.ios-standalone-fix #ui {
   white-space: nowrap;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
 }
-
-#map.routeMode .routeNodeRewardTag--ring {
-  border-color: rgba(100, 200, 255, 0.25);
-  color: rgba(150, 220, 255, 0.95);
-}
-
-#map.routeMode .routeNodeRewardTag--modifier {
-  border-color: rgba(255, 200, 100, 0.25);
-  color: rgba(255, 220, 140, 0.95);
-}
-
 #map.routeMode .routeNodeMeta {
   position: absolute;
   left: 50%;
@@ -4587,20 +4519,6 @@ html.ios-standalone-fix #ui {
   gap: 4px;
   pointer-events: none;
 }
-
-#map.routeMode .routeNodeLabel {
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(229, 218, 188, 0.1);
-  background: rgba(18, 25, 39, 0.92);
-  color: rgba(244, 236, 216, 0.92);
-  font: 800 10px var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26);
-}
-
 #map.routeMode .routeNodeStateBadge {
   position: absolute;
   left: 50%;
@@ -4624,19 +4542,6 @@ html.ios-standalone-fix #ui {
   background: rgba(86, 60, 20, 0.92);
   color: rgba(255, 232, 179, 0.98);
 }
-
-#map.routeMode .routeNodeStateBadge--reachable {
-  border: 1px solid rgba(120, 211, 255, 0.34);
-  background: rgba(24, 57, 76, 0.94);
-  color: rgba(200, 239, 255, 0.98);
-}
-
-#map.routeMode .routeNodeStateBadge--completed {
-  border: 1px solid rgba(216, 195, 145, 0.26);
-  background: rgba(47, 42, 30, 0.9);
-  color: rgba(242, 225, 188, 0.94);
-}
-
 #map.routeMode .routeNode:hover:not([disabled]),
 #map.routeMode .routeNode:focus-visible:not([disabled]) {
   transform: translate(-50%, -50%) scale(1.06);
@@ -4699,14 +4604,6 @@ html.ios-standalone-fix #ui {
 #map.routeMode .routeNode--future .routeNodeIcon::before {
   opacity: 0.34;
 }
-
-#map.routeMode .routeNode--locked .routeNodeLabel,
-#map.routeMode .routeNode--future .routeNodeLabel {
-  color: rgba(194, 203, 220, 0.64);
-  border-color: rgba(175, 189, 216, 0.08);
-  background: rgba(17, 23, 35, 0.86);
-}
-
 #map.routeMode .routeNode--reachable {
   animation: routeNodePulse 2.1s ease-in-out infinite;
 }
@@ -4729,23 +4626,6 @@ html.ios-standalone-fix #ui {
   opacity: 0.72;
   filter: saturate(0.44) brightness(0.92);
 }
-
-#map.routeMode .routeNode--completed .routeNodeLabel {
-  background: rgba(40, 34, 25, 0.9);
-}
-
-#map.routeMode .routeNode--reachable .routeNodeLabel {
-  border-color: rgba(124, 204, 247, 0.24);
-  background: rgba(18, 37, 54, 0.94);
-  color: rgba(221, 245, 255, 0.98);
-}
-
-#map.routeMode .routeNode--current .routeNodeLabel {
-  border-color: rgba(240, 205, 124, 0.28);
-  background: rgba(56, 42, 20, 0.94);
-  color: rgba(255, 238, 196, 0.99);
-}
-
 #map.routeMode .routeNode--boss .routeNodeIcon {
   width: 66px;
   height: 66px;
@@ -4772,59 +4652,14 @@ html.ios-standalone-fix #ui {
   color: rgba(247, 236, 214, 0.94);
   box-shadow: inset 0 1px 0 rgba(255, 240, 204, 0.03);
 }
-
-#map.routeMode .routeInfoTop {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#map.routeMode .routeInfoState {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font: 800 10px var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-#map.routeMode .routeInfoState--current {
-  border: 1px solid rgba(245, 211, 127, 0.34);
-  background: rgba(83, 58, 22, 0.92);
-  color: rgba(255, 232, 181, 0.98);
-}
-
-#map.routeMode .routeInfoState--reachable {
-  border: 1px solid rgba(118, 211, 255, 0.34);
-  background: rgba(21, 53, 73, 0.94);
-  color: rgba(204, 240, 255, 0.98);
-}
-
-#map.routeMode .routeInfoState--completed {
-  border: 1px solid rgba(216, 195, 145, 0.24);
-  background: rgba(46, 41, 31, 0.88);
-  color: rgba(242, 225, 188, 0.94);
-}
-
-#map.routeMode .routeInfoState--future {
-  border: 1px solid rgba(149, 163, 191, 0.18);
-  background: rgba(28, 35, 47, 0.9);
-  color: rgba(198, 209, 229, 0.82);
-}
-
 #map.routeMode .routeInfoTitle {
   font-size: 15px;
   font-weight: 900;
   letter-spacing: 0.02em;
 }
 
-#map.routeMode .routeInfoMeta {
-  margin-top: 3px;
-  font-size: 12px;
-  color: rgba(223, 216, 198, 0.72);
-  opacity: 1;
+#map.routeMode .routeInfoTitle--muted {
+  color: rgba(198, 209, 229, 0.6);
 }
 
 #map.routeMode--phone .sub {
@@ -4835,24 +4670,6 @@ html.ios-standalone-fix #ui {
   font-size: 12px;
   line-height: 1.3;
 }
-
-#map.routeMode--phone .routeLegend {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  padding-bottom: 1px;
-}
-
-#map.routeMode--phone .routeLegend::-webkit-scrollbar {
-  display: none;
-}
-
-#map.routeMode--phone .routeLegendChip {
-  flex: 0 0 auto;
-}
-
 #map.routeMode--phone #mapGraphWrap,
 #map.routeMode--phone.delveFull #mapGraphWrap {
   background: linear-gradient(180deg, rgba(11, 16, 26, 0.99), rgba(10, 14, 23, 1));
@@ -4929,13 +4746,6 @@ html.ios-standalone-fix #ui {
   top: calc(100% + 4px);
   gap: 3px;
 }
-
-#map.routeMode--phone .routeNodeLabel {
-  padding: 2px 7px;
-  font-size: 8px;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-}
-
 #map.routeMode--phone .routeNodeTag {
   padding: 2px 7px;
   font-size: 8px;
@@ -4946,11 +4756,6 @@ html.ios-standalone-fix #ui {
 #map.routeMode--phone .routeNode--future .routeNodeTag {
   display: none;
 }
-
-#map.routeMode--phone .routeNode--completed:not(.routeNode--current) .routeNodeLabel {
-  opacity: 0.86;
-}
-
 #map.routeMode--phone .routeNode--future {
   opacity: 0.4;
   filter: saturate(0.34) brightness(0.76);
@@ -4966,17 +4771,6 @@ html.ios-standalone-fix #ui {
   background:
     linear-gradient(180deg, rgba(18, 24, 37, 0.94), rgba(13, 19, 29, 0.98));
 }
-
-#map.routeMode--phone .routeInfoTop {
-  gap: 7px;
-}
-
-#map.routeMode--phone .routeInfoState {
-  min-height: 20px;
-  padding: 2px 8px;
-  font-size: 9px;
-}
-
 @media (max-width: 768px), (max-height: 500px) {
   #map.routeMode #mapTopBar {
     padding: calc(10px + var(--safe-top)) 12px 6px 12px;
@@ -5001,23 +4795,6 @@ html.ios-standalone-fix #ui {
     margin: 4px 0 0;
     font-size: 12px;
   }
-
-  #map.routeMode .routeLegend {
-    gap: 4px;
-  }
-
-  #map.routeMode .routeLegendChip {
-    min-height: 20px;
-    padding: 1px 8px;
-    font-size: 9px;
-  }
-
-  #map.routeMode #mapDepthLabel {
-    margin: 8px 0 0 12px;
-    padding: 5px 10px;
-    font-size: 11px;
-  }
-
   #map.routeMode .routeNode {
     width: 64px;
     height: 64px;
@@ -5048,12 +4825,6 @@ html.ios-standalone-fix #ui {
     top: calc(100% + 5px);
     gap: 3px;
   }
-
-  #map.routeMode .routeNodeLabel {
-    padding: 2px 7px;
-    font-size: 8px;
-  }
-
   #map.routeMode .routeNodeStateBadge {
     bottom: calc(100% + 5px);
     min-height: 18px;
@@ -5077,13 +4848,6 @@ html.ios-standalone-fix #ui {
   #map.routeMode--phone .routeSubMessage {
     max-width: min(100%, 34ch);
   }
-
-  #map.routeMode--phone #mapDepthLabel {
-    position: sticky;
-    top: 8px;
-    z-index: 3;
-  }
-
   #map.routeMode--phone .routeNode {
     width: 66px;
     height: 66px;
@@ -5103,12 +4867,6 @@ html.ios-standalone-fix #ui {
     width: 58px;
     height: 58px;
   }
-
-  #map.routeMode--phone .routeNodeStateBadge--completed,
-  #map.routeMode--phone .routeNode--future .routeNodeLabel {
-    display: none;
-  }
-
   #map.routeMode--phone .routeNode--current .routeNodeMeta,
   #map.routeMode--phone .routeNode--reachable .routeNodeMeta {
     display: inline-flex;

@@ -114,7 +114,6 @@ import {
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
 import {
-  defaultRewardFamilyForDepth,
   type ProgressionRewardFamily,
 } from "./progression/rewards/rewardFamilies";
 import {
@@ -184,10 +183,7 @@ import {
   ensureProgressionRewardState,
   rerollProgressionReward,
 } from "./progression/rewards/progressionRewardFlow";
-import { equipRing, unequipRing, applyModifierTokenToRing, applyBoonToRing } from "./progression/rings/ringState";
-import { generateBoonOptions, type BoonSelectionContext } from "./progression/rings/ringBoonSelection";
-import { getRingDefById } from "./progression/rings/ringContent";
-import type { ModifierTokenType } from "./progression/rings/ringTypes";
+import { equipRing, unequipRing } from "./progression/rings/ringState";
 import { equipStarterRingForCharacter } from "./progression/rings/characterStarterRingMap";
 import { getGold } from "./economy/gold";
 import { ensureRunProgressionState } from "./economy/xp";
@@ -299,7 +295,6 @@ type CreateGameArgs = {
       kills: HTMLElement;
       gold: HTMLElement;
       rings: HTMLElement;
-      tokens: HTMLElement;
     };
 
     mapEl: {
@@ -308,7 +303,6 @@ type CreateGameArgs = {
       backBtn: HTMLButtonElement;
       title: HTMLDivElement;
       infoPanel: HTMLDivElement;
-      depthLabel: HTMLDivElement;
       sub: HTMLDivElement;
       graphWrap: HTMLDivElement;
       graphContent: HTMLDivElement;
@@ -896,7 +890,7 @@ export function createGame(args: CreateGameArgs) {
         completeRun(world, "Victory", "The act boss has been defeated.");
         return true;
       }
-      showDelveMap(`Row ${getMapDepth(world)} cleared!\nChoose your next destination.`);
+      showDelveMap("Choose your next destination.");
       return true;
     }
     completeRun(world);
@@ -1173,12 +1167,6 @@ export function createGame(args: CreateGameArgs) {
     return Object.keys(w.progression?.ringsByInstanceId ?? {}).length;
   }
 
-  function getEndStatsTokenCount(w: World): number {
-    const tokens = w.progression?.storedModifierTokens;
-    if (!tokens) return 0;
-    return Object.values(tokens).reduce((sum, value) => sum + Math.max(0, Math.floor(value ?? 0)), 0);
-  }
-
   function populateEndStats(w: World): void {
     const summary = getEndRunSummary(w);
     args.ui.endEl.time.textContent = formatTimeMMSS(getEndStatsTimeSec(w));
@@ -1186,7 +1174,6 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.kills.textContent = String(summary.kills);
     args.ui.endEl.gold.textContent = String(Math.max(0, Math.floor(getGold(w))));
     args.ui.endEl.rings.textContent = String(getEndStatsRingCount(w));
-    args.ui.endEl.tokens.textContent = String(getEndStatsTokenCount(w));
   }
 
   function getEndRunSummary(w: World): EndLeaderboardRunPayload {
@@ -2340,7 +2327,7 @@ export function createGame(args: CreateGameArgs) {
       mapId: node.runtime.mapId,
       bossId: node.runtime.bossId,
       objectiveId: node.runtime.objectiveId,
-      rewardFamily: node.rewardFamily ?? defaultRewardFamilyForDepth(getNodeDepth(node)),
+      rewardFamily: node.rewardFamily ?? "RING",
       variantSeed: node.runtime.variantSeed,
       rareCount: node.runtime.rareCount,
       spawnZoneCount: node.runtime.spawnZoneCount,
@@ -2370,7 +2357,7 @@ export function createGame(args: CreateGameArgs) {
       mapId,
       bossId: actBossPlan?.bossId,
       objectiveId: objectiveIdFromArchetype(archetype),
-      rewardFamily: defaultRewardFamilyForDepth(floorIndex + 1),
+      rewardFamily: "RING",
       variantSeed: deterministicVariantSeed(w.runSeed, floorIndex, floorIndex + 1, archetype, mapId),
     };
   }
@@ -2420,7 +2407,7 @@ export function createGame(args: CreateGameArgs) {
       mapId,
       bossId: actBossPlan?.bossId,
       objectiveId,
-      rewardFamily: choice.rewardFamily ?? defaultRewardFamilyForDepth(choice.depth),
+      rewardFamily: choice.rewardFamily ?? "RING",
       variantSeed,
     };
   }
@@ -2514,7 +2501,7 @@ export function createGame(args: CreateGameArgs) {
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
 
-    showDelveMap("Choose your starting location.\nClimb the act map toward the boss.");
+    showDelveMap("Choose your starting location.");
   }
 
   async function executeStartDeterministicRun(characterId: PlayableCharacterId): Promise<void> {
@@ -2997,7 +2984,6 @@ export function createGame(args: CreateGameArgs) {
   function resetRouteMapFrame(): void {
     args.ui.mapEl.graphWrap.scrollTop = 0;
     args.ui.mapEl.graphWrap.classList.remove("routeScrollable");
-    args.ui.mapEl.depthLabel.textContent = "";
     args.ui.mapEl.infoPanel.textContent = "";
     args.ui.mapEl.svg.innerHTML = `<rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />`;
     args.ui.mapEl.hit.innerHTML = "";
@@ -3025,18 +3011,6 @@ export function createGame(args: CreateGameArgs) {
     if (node.reachable) return "reachable";
     if (node.completed) return "completed";
     return "future";
-  };
-
-  const routeNodeStateBadgeText = (node: RouteMapVM["nodes"][number]): string | null => {
-    if (node.current) return "Current";
-    if (node.reachable) return "Next";
-    if (node.completed) return "Done";
-    return null;
-  };
-
-  const rewardFamilyCssKey = (family: ProgressionRewardFamily): string => {
-    if (family === "RING_MODIFIER_TOKEN") return "modifier";
-    return "ring";
   };
 
   const routeEdgeStateClass = (
@@ -3111,14 +3085,9 @@ export function createGame(args: CreateGameArgs) {
       args.ui.mapEl.infoPanel.textContent = "";
       return;
     }
-    const summaryPrefix = `${routeStatusLabel(node.status)} ${node.kindLabel}`;
-    const stateClass = routeNodeStateClass(node);
+    const mutedClass = node.reachable || node.current ? "" : " routeInfoTitle--muted";
     args.ui.mapEl.infoPanel.innerHTML = `
-      <div class="routeInfoTop">
-        <span class="routeInfoState routeInfoState--${stateClass}">${routeStatusLabel(node.status)}</span>
-        <div class="routeInfoTitle">${node.title}</div>
-      </div>
-      <div class="routeInfoMeta">${summaryPrefix} · ${node.rewardFamilyLabel} Reward · ${node.subtitle}</div>
+      <div class="routeInfoTitle${mutedClass}">${node.title}</div>
     `;
   }
 
@@ -3137,21 +3106,7 @@ export function createGame(args: CreateGameArgs) {
     subMessage.className = "routeSubMessage";
     subMessage.textContent = subText;
     args.ui.mapEl.sub.appendChild(subMessage);
-    if (vm.mode === "DELVE") {
-      const legend = document.createElement("div");
-      legend.className = "routeLegend";
-      legend.innerHTML = `
-        <span class="routeLegendChip routeLegendChip--available">Available Path</span>
-        <span class="routeLegendChip routeLegendChip--visited">Visited Path</span>
-        <span class="routeLegendChip routeLegendChip--future">Future Path</span>
-      `;
-      args.ui.mapEl.sub.appendChild(legend);
-    }
     args.ui.mapEl.graphWrap.classList.add("routeScrollable");
-    args.ui.mapEl.depthLabel.textContent =
-      vm.mode === "DELVE"
-        ? `Row ${vm.currentDepth}/${vm.rowCount}`
-        : `Depth ${vm.currentDepth}`;
 
     const viewportWidth = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientWidth || MAP_VIEW_WIDTH));
     const viewportHeight = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientHeight || MAP_VIEW_HEIGHT));
@@ -3209,30 +3164,21 @@ export function createGame(args: CreateGameArgs) {
       icon.className = "routeNodeIcon";
       icon.innerHTML = routeNodeIconMarkup(node.visualType);
       btn.appendChild(icon);
-      const stateBadgeText = routeNodeStateBadgeText(node);
-      if (stateBadgeText) {
+      if (node.current) {
         const stateBadge = document.createElement("span");
-        stateBadge.className = `routeNodeStateBadge routeNodeStateBadge--${stateClass}`;
-        stateBadge.textContent = stateBadgeText;
+        stateBadge.className = "routeNodeStateBadge routeNodeStateBadge--current";
+        stateBadge.textContent = "Current";
         btn.appendChild(stateBadge);
       }
-      const meta = document.createElement("span");
-      meta.className = "routeNodeMeta";
-      const label = document.createElement("span");
-      label.className = "routeNodeLabel";
-      label.textContent = node.kindLabel;
-      meta.appendChild(label);
-      const rewardTag = document.createElement("span");
-      rewardTag.className = `routeNodeTag routeNodeRewardTag routeNodeRewardTag--${rewardFamilyCssKey(node.rewardFamily)}`;
-      rewardTag.textContent = node.rewardFamilyLabel;
-      meta.appendChild(rewardTag);
       if (node.combatTagText) {
+        const meta = document.createElement("span");
+        meta.className = "routeNodeMeta";
         const tag = document.createElement("span");
         tag.className = "routeNodeTag";
         tag.textContent = node.combatTagText;
         meta.appendChild(tag);
+        btn.appendChild(meta);
       }
-      btn.appendChild(meta);
       btn.addEventListener("mouseenter", () => setRouteInfo(node));
       btn.addEventListener("focus", () => setRouteInfo(node));
       btn.addEventListener("pointerdown", () => setRouteInfo(node));
@@ -3299,28 +3245,6 @@ export function createGame(args: CreateGameArgs) {
 
   function handsScreenUnequipSlot(slotId: string): void {
     unequipRing(world, slotId as any);
-    recomputeDerivedStats(world);
-  }
-
-  function handsScreenApplyToken(instanceId: string, tokenType: ModifierTokenType): void {
-    applyModifierTokenToRing(world, tokenType, instanceId);
-    recomputeDerivedStats(world);
-  }
-
-  function handsScreenRequestBoonOptions(instanceId: string): BoonSelectionContext {
-    const state = world.progression;
-    if (!state) return null;
-    const instance = state.ringsByInstanceId[instanceId];
-    if (!instance) return null;
-    const def = getRingDefById(instance.defId);
-    if (!def) return null;
-    const options = generateBoonOptions(world, def.familyId, instance.unlockedTalentNodeIds, 3);
-    if (options.length === 0) return null;
-    return { ringName: def.name, familyId: def.familyId, options };
-  }
-
-  function handsScreenApplyBoon(instanceId: string, nodeId: string): void {
-    applyBoonToRing(world, instanceId, nodeId);
     recomputeDerivedStats(world);
   }
 
@@ -3958,9 +3882,6 @@ export function createGame(args: CreateGameArgs) {
     closeHandsScreen,
     handsScreenEquipToSlot,
     handsScreenUnequipSlot,
-    handsScreenApplyToken,
-    handsScreenRequestBoonOptions,
-    handsScreenApplyBoon,
     isHandsScreenOpen: () => handsScreenOpen,
     getHandsScreenPendingRingDefId: () => handsScreenChooseSlotPending?.ringDefId ?? null,
   };

@@ -4,10 +4,7 @@
 // @agents   no ring mutation or Pixi hands rendering; see ringState.ts and handsScreen.ts
 
 import type { RuntimeEffect } from "../effects/effectTypes";
-import {
-  getRingDefById,
-  getRingFamilyTalentTreeById,
-} from "./ringContent";
+import { getRingDefById } from "./ringContent";
 import { collectRingRuntimeEffects } from "./ringEffects";
 import {
   ensureRingProgressionState,
@@ -16,7 +13,6 @@ import {
 import type {
   FingerSlotState,
   RingInstance,
-  RingTalentNodeDef,
   RingProgressionState,
 } from "./ringTypes";
 
@@ -26,13 +22,11 @@ export type RingProgressionInspectionEntry = {
   ringName: string;
   familyId: string;
   mainEffectScalar: number;
-  unlockedNodes: RingTalentNodeDef[];
   runtimeEffects: RuntimeEffect[];
 };
 
 export type RingProgressionInspection = {
   hands: RingProgressionState["hands"];
-  storedModifierTokens: RingProgressionState["storedModifierTokens"];
   rings: RingProgressionInspectionEntry[];
 };
 
@@ -43,24 +37,16 @@ export function inspectRingProgressionState(
 
   return {
     hands: state.hands,
-    storedModifierTokens: state.storedModifierTokens,
     rings: Object.values(state.ringsByInstanceId).map((instance) => {
       const def = getRingDefById(instance.defId);
-      const tree = def ? getRingFamilyTalentTreeById(def.familyId) : undefined;
       const slot = getFingerSlot(state, instance.slotId);
-      const unlockedNodes = tree
-        ? instance.unlockedTalentNodeIds
-            .map((nodeId) => tree.nodes.find((candidate) => candidate.id === nodeId) ?? null)
-            .filter((node): node is RingTalentNodeDef => !!node)
-        : [];
 
       return {
         instance,
         slot,
         ringName: def?.name ?? instance.defId,
         familyId: def?.familyId ?? "unknown",
-        mainEffectScalar: instance.increasedEffectScalar + (slot?.empowermentScalar ?? 0),
-        unlockedNodes,
+        mainEffectScalar: runtimeEffects.find((effect) => effect.source.ringInstanceId === instance.instanceId && effect.source.kind === "RING_MAIN")?.increasedEffectScalar ?? 0,
         runtimeEffects: runtimeEffects.filter((effect) => effect.source.ringInstanceId === instance.instanceId),
       };
     }),

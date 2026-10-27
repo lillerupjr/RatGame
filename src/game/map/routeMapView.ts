@@ -6,7 +6,6 @@
 import type { StageId } from "../content/stages";
 import { getReachableNodes, type DelveMap, type DelveNode, type DelveNodeType } from "./delveMap";
 import {
-  defaultRewardFamilyForDepth,
   rewardFamilyLabel,
   type ProgressionRewardFamily,
 } from "../progression/rewards/rewardFamilies";
@@ -33,7 +32,6 @@ export type RouteNodeVM = {
   current: boolean;
   completed: boolean;
   title: string;
-  subtitle: string;
   iconText: string;
   rewardFamily: ProgressionRewardFamily;
   rewardFamilyLabel: string;
@@ -52,7 +50,6 @@ export type DeterministicRouteOption = {
   objectiveId?: ObjectiveId;
   rewardFamily?: ProgressionRewardFamily;
   title?: string;
-  subtitle?: string;
 };
 
 export type RouteEdgeVM = {
@@ -132,20 +129,6 @@ function combatSubtypeLabel(objectiveId: ObjectiveId | undefined): string {
   }
 }
 
-function displayZoneName(zoneId: StageId | "DETERMINISTIC"): string {
-  switch (zoneId) {
-    case "DOCKS":
-      return "Docks";
-    case "SEWERS":
-      return "Sewers";
-    case "CHINATOWN":
-      return "Chinatown";
-    case "DETERMINISTIC":
-    default:
-      return "Deterministic";
-  }
-}
-
 function titleForDelveNode(node: DelveNode, showCombatSubtypes: boolean): string {
   switch (node.nodeType) {
     case "REST":
@@ -162,10 +145,6 @@ function titleForDelveNode(node: DelveNode, showCombatSubtypes: boolean): string
     default:
       return showCombatSubtypes ? combatSubtypeLabel(node.combatSubtype) : "Combat";
   }
-}
-
-function subtitleForDelveNode(node: DelveNode): string {
-  return `${displayZoneName(node.runtime.zoneId)} · Row ${node.rowIndex + 1}`;
 }
 
 function kindLabelForDelveNode(node: DelveNode): string {
@@ -200,7 +179,7 @@ export function buildDelveRouteMapVM(
     .map((node) => {
       const current = node.id === delveMap.currentNodeId;
       const visualType = visualTypeForNodeType(node.nodeType);
-      const rewardFamily = node.rewardFamily ?? defaultRewardFamilyForDepth(node.rowIndex + 1);
+      const rewardFamily = node.rewardFamily ?? "RING";
       return {
         id: node.id,
         mode: "DELVE" as const,
@@ -215,7 +194,6 @@ export function buildDelveRouteMapVM(
         current,
         completed: delveMap.completedNodeIds.has(node.id),
         title: titleForDelveNode(node, showCombatSubtypes),
-        subtitle: subtitleForDelveNode(node),
         iconText: iconForVisualType(visualType),
         rewardFamily,
         rewardFamilyLabel: rewardFamilyLabel(rewardFamily),
@@ -281,7 +259,7 @@ export function buildDeterministicRouteMapVM(
   const laneCount = Math.max(1, options.length);
   const nodes: RouteNodeVM[] = options.map((choice, index) => {
     const visualType = visualTypeForArchetype(choice.archetype);
-    const rewardFamily = choice.rewardFamily ?? defaultRewardFamilyForDepth(depth);
+    const rewardFamily = choice.rewardFamily ?? "RING";
     return {
       id: `det-${floorIndex}-${depth}-${choice.archetype}-${choice.objectiveId ?? "AUTO"}-${index}`,
       mode: "DETERMINISTIC",
@@ -296,7 +274,6 @@ export function buildDeterministicRouteMapVM(
       current: false,
       completed: false,
       title: choice.title ?? labelForArchetype(choice.archetype, choice.objectiveId),
-      subtitle: choice.subtitle ?? `Deterministic · Depth ${depth}`,
       iconText: iconForVisualType(visualType),
       rewardFamily,
       rewardFamilyLabel: rewardFamilyLabel(rewardFamily),

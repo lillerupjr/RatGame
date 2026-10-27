@@ -9,7 +9,6 @@ import {
   ensureProgressionRewardState,
 } from "../../progression/rewards/progressionRewardFlow";
 import {
-  defaultRewardFamilyForDepth,
   type ProgressionRewardFamily,
 } from "../../progression/rewards/rewardFamilies";
 import {
@@ -37,7 +36,7 @@ type PresentableRewardTicket = {
 };
 
 function openTicketReward(world: World, ticket: PresentableRewardTicket): boolean {
-  const family = ticket.family ?? defaultRewardFamilyForDepth(world.currentFloorIntent?.depth ?? world.mapDepth ?? 1);
+  const family = ticket.family ?? "RING";
   beginProgressionReward(world, family, ticket.source, ticket.optionCount);
   const progressionReward = ensureProgressionRewardState(world);
   if (!progressionReward.active || progressionReward.options.length <= 0) {

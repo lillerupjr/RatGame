@@ -42,16 +42,12 @@ describe("vendor progression offers", () => {
     expect(offers).toHaveLength(5);
     expect(offers.every((offer) => typeof offer.option.id === "string")).toBe(true);
     expect(offers.some((offer) => offer.option.family === "RING")).toBe(true);
-    expect(offers.some((offer) => offer.option.family === "RING_MODIFIER_TOKEN")).toBe(true);
+    expect(offers.every((offer) => offer.option.family === "RING")).toBe(true);
 
     const ringIndex = offers.findIndex((offer) => offer.option.family === "RING");
     expect(ringIndex).toBeGreaterThanOrEqual(0);
     expect(tryPurchaseVendorOffer(world, ringIndex)).toBe(true);
     expect(Object.keys(world.progression.ringsByInstanceId)).toHaveLength(1);
 
-    const tokenIndex = offers.findIndex((offer) => offer.option.family === "RING_MODIFIER_TOKEN" && !offer.isSold);
-    expect(tokenIndex).toBeGreaterThanOrEqual(0);
-    expect(tryPurchaseVendorOffer(world, tokenIndex)).toBe(true);
-    expect(world.progression.storedModifierTokens.LEVEL_UP + world.progression.storedModifierTokens.INCREASED_EFFECT_20).toBe(1);
   });
 });

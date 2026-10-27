@@ -69,7 +69,6 @@ describe("routeMapView", () => {
     expect(vm.depthWindow).toEqual({ start: 1, end: 3 });
     expect(byId.get(start.id)?.status).toBe("CURRENT");
     expect(byId.get(start.id)?.completed).toBe(true);
-    expect(byId.get(start.id)?.subtitle).toBe("Docks · Row 1");
     expect(byId.get(next.id)?.status).toBe("REACHABLE");
     expect(byId.get(next.id)?.visualType).toBe("shop");
     expect(byId.get(boss.id)?.status).toBe("LOCKED");

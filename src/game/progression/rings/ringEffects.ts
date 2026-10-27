@@ -1,11 +1,11 @@
 // @system   ring-progression/system
-// @owns     collect runtime effects and stat mods from equipped rings and unlocked talents
+// @owns     collect runtime effects and stat mods from equipped rings
 // @doc      docs/canonical/ring_progression_system.md
 // @agents   no state mutation or scalar stat resolution; see ringState.ts and combatStatsResolver.ts
 
 import type { EffectDef, RuntimeEffect, StatMod } from "../effects/effectTypes";
 import { collectStatModsFromRuntimeEffects } from "../effects/statMods";
-import { getRingDefById, getRingFamilyTalentTreeById } from "./ringContent";
+import { getRingDefById } from "./ringContent";
 import { ensureRingProgressionState, getFingerSlot } from "./ringState";
 import type { FingerSlotId, RingFamilyId, RingProgressionState } from "./ringTypes";
 
@@ -35,9 +35,6 @@ export function collectRingRuntimeEffects(state: RingProgressionState): RuntimeE
   for (const instance of Object.values(state.ringsByInstanceId)) {
     const def = getRingDefById(instance.defId);
     if (!def) continue;
-    const slot = getFingerSlot(state, instance.slotId as FingerSlotId);
-    const slotScalar = slot?.empowermentScalar ?? 0;
-
     effects.push({
       source: {
         kind: "RING_MAIN",
@@ -47,26 +44,8 @@ export function collectRingRuntimeEffects(state: RingProgressionState): RuntimeE
         slotId: instance.slotId,
       },
       effect: def.mainEffect,
-      increasedEffectScalar: instance.increasedEffectScalar + slotScalar,
+      increasedEffectScalar: 0,
     });
-
-    const tree = getRingFamilyTalentTreeById(def.familyId);
-    if (!tree) continue;
-    for (const nodeId of instance.unlockedTalentNodeIds) {
-      const node = tree.nodes.find((candidate) => candidate.id === nodeId);
-      if (!node) continue;
-      effects.push({
-        source: {
-          kind: "RING_TALENT",
-          id: node.id,
-          nodeId: node.id,
-          ringInstanceId: instance.instanceId,
-          ringDefId: def.id,
-          slotId: instance.slotId,
-        },
-        effect: node.effect,
-      });
-    }
   }
 
   // --- Neighbor-ring resolution ---

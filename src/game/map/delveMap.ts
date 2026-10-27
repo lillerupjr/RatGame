@@ -624,73 +624,9 @@ function runtimePlanForNodeType(
 }
 
 const REWARD_ELIGIBLE_TYPES: Set<DelveNodeType> = new Set(["COMBAT", "ELITE", "QUESTION_MARK"]);
-const REWARD_FAMILIES: ProgressionRewardFamily[] = ["RING", "RING_MODIFIER_TOKEN"];
-
-function assignRewardFamilies(seed: number, nodes: Map<string, MutableNode>): void {
-  const rng = new RNG(seed ^ hashString("reward-families"));
-
-  // Group eligible nodes by row
-  const rowMap = new Map<number, MutableNode[]>();
+function assignRewardFamilies(nodes: Map<string, MutableNode>): void {
   for (const node of nodes.values()) {
-    if (!REWARD_ELIGIBLE_TYPES.has(node.nodeType)) continue;
-    const list = rowMap.get(node.rowIndex) ?? [];
-    list.push(node);
-    rowMap.set(node.rowIndex, list);
-  }
-
-  // Count total eligible nodes for budget
-  let totalEligible = 0;
-  for (const list of rowMap.values()) totalEligible += list.length;
-  if (totalEligible === 0) return;
-
-  const ringBudget = Math.ceil(totalEligible * 0.55);
-  const budget: Record<ProgressionRewardFamily, number> = {
-    RING: ringBudget,
-    RING_MODIFIER_TOKEN: totalEligible - ringBudget,
-    HAND_EFFECT: 0,
-  };
-
-  function weightedPick(): ProgressionRewardFamily {
-    const totalRemaining = budget.RING + budget.RING_MODIFIER_TOKEN;
-    if (totalRemaining <= 0) return rng.pick(REWARD_FAMILIES);
-    const roll = rng.int(1, totalRemaining);
-    if (roll <= budget.RING) return "RING";
-    return "RING_MODIFIER_TOKEN";
-  }
-
-  // Sort rows by index for determinism
-  const sortedRows = [...rowMap.entries()].sort((a, b) => a[0] - b[0]);
-
-  for (const [, rowNodes] of sortedRows) {
-    if (rowNodes.length === 1) {
-      const family = weightedPick();
-      rowNodes[0].rewardFamily = family;
-      budget[family]--;
-    } else {
-      // Force diversity: assign at least one of each family in the row
-      // Shuffle nodes within row to avoid lane-position bias
-      const shuffled = [...rowNodes];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = rng.int(0, i);
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-
-      // First two get different families
-      const first = weightedPick();
-      shuffled[0].rewardFamily = first;
-      budget[first]--;
-
-      const second = first === "RING" ? "RING_MODIFIER_TOKEN" : "RING";
-      shuffled[1].rewardFamily = second;
-      budget[second]--;
-
-      // Remaining nodes in the row get weighted picks
-      for (let i = 2; i < shuffled.length; i++) {
-        const family = weightedPick();
-        shuffled[i].rewardFamily = family;
-        budget[family]--;
-      }
-    }
+    if (REWARD_ELIGIBLE_TYPES.has(node.nodeType)) node.rewardFamily = "RING";
   }
 }
 
@@ -781,7 +717,7 @@ function buildNodesForRows(seed: number, rows: RowLayout[], edges: DelveEdge[], 
 
   assignUtilityType("SHOP", config.shopCount);
   assignUtilityType("REST", config.extraRestCount);
-  assignRewardFamilies(seed, nodes);
+  assignRewardFamilies(nodes);
 
   const finalizedNodes = new Map<string, DelveNode>();
   for (const node of nodes.values()) {

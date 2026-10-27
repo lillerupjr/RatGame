@@ -105,29 +105,6 @@ export class StatsRail extends Container {
     for (const [label, value, delta] of statRows) {
       yPos = this.addStatRow(label, value, yPos, contentW, delta);
     }
-
-    // ── Tokens ──
-    const tokens = snapshot.storedTokens;
-    const totalTokens = tokens.LEVEL_UP + tokens.INCREASED_EFFECT_20;
-    if (totalTokens > 0) {
-      yPos += 4;
-      const tokenDivider = new Graphics();
-      tokenDivider.rect(0, yPos, contentW + 20, 1).fill({ color: COLORS.border, alpha: 0.65 });
-      this.contentContainer.addChild(tokenDivider);
-      yPos += SPACING.md;
-
-      const tokenHeader = createTextLabel("TOKENS", "sectionHeader");
-      tokenHeader.y = yPos;
-      this.contentContainer.addChild(tokenHeader);
-      yPos += 18;
-
-      if (tokens.LEVEL_UP > 0) {
-        yPos = this.addTokenRow("Level Up", tokens.LEVEL_UP, yPos, contentW);
-      }
-      if (tokens.INCREASED_EFFECT_20 > 0) {
-        yPos = this.addTokenRow("+20% Effect", tokens.INCREASED_EFFECT_20, yPos, contentW);
-      }
-    }
   }
 
   private addStatRow(label: string, value: string, y: number, contentW: number, delta: number | null): number {
@@ -159,21 +136,6 @@ export class StatsRail extends Container {
     this.contentContainer.addChild(div);
 
     return y + 30;
-  }
-
-  private addTokenRow(label: string, count: number, y: number, contentW: number): number {
-    const labelText = createTextLabel(label, "statLabel");
-    labelText.y = y;
-    this.contentContainer.addChild(labelText);
-
-    const countStyle = TEXT_STYLES.statValue.clone();
-    countStyle.fill = COLORS.amber;
-    const countText = new Text({ text: String(count), style: countStyle });
-    countText.x = contentW - countText.width;
-    countText.y = y;
-    this.contentContainer.addChild(countText);
-
-    return y + 24;
   }
 }
 

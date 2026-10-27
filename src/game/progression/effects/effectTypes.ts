@@ -24,9 +24,7 @@ export interface StatMod {
 }
 
 export type EffectSourceKind =
-  | "RING_MAIN"
-  | "RING_TALENT"
-  | "HAND_FINGER";
+  | "RING_MAIN";
 
 export type EffectSourceRef = {
   kind: EffectSourceKind;
@@ -34,7 +32,6 @@ export type EffectSourceRef = {
   ringInstanceId?: string;
   ringDefId?: string;
   slotId?: string;
-  nodeId?: string;
 };
 
 export type StatModifierEffectDef = {
@@ -365,12 +362,6 @@ export type CombatRulesEffectDef = {
   rules: CombatRuleDef[];
 };
 
-export type StructuralHandEffectDef = {
-  kind: "HAND_STRUCTURE";
-  effectType: "ADD_FINGER" | "EMPOWER_FINGER";
-  params?: Record<string, unknown>;
-};
-
 export type MirrorLeftRingEffectDef = {
   kind: "MIRROR_LEFT_RING";
 };
@@ -388,7 +379,6 @@ export type EffectDef =
   | WeaponFireRulesEffectDef
   | TriggeredEffectDef
   | CombatRulesEffectDef
-  | StructuralHandEffectDef
   | MirrorLeftRingEffectDef
   | AmplifyNeighborsEffectDef;
 

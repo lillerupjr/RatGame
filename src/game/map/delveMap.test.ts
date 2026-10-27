@@ -16,7 +16,7 @@ describe("assignRewardFamilies", () => {
     const map = createDelveMap(42);
     for (const node of eligibleNodes(map.nodes)) {
       expect(node.rewardFamily).toBeDefined();
-      expect(["RING", "RING_MODIFIER_TOKEN"]).toContain(node.rewardFamily);
+      expect(node.rewardFamily).toBe("RING");
     }
   });
 
@@ -36,48 +36,5 @@ describe("assignRewardFamilies", () => {
     for (let i = 0; i < nodes1.length; i++) {
       expect(nodes1[i].rewardFamily).toBe(nodes2[i].rewardFamily);
     }
-  });
-
-  test("multi-node rows have at least 2 distinct reward families", () => {
-    // Test across several seeds to increase confidence
-    for (const seed of [1, 7, 42, 100, 999]) {
-      const map = createDelveMap(seed);
-      const rowMap = new Map<number, Set<string>>();
-      for (const node of eligibleNodes(map.nodes)) {
-        const families = rowMap.get(node.rowIndex) ?? new Set<string>();
-        families.add(node.rewardFamily!);
-        rowMap.set(node.rowIndex, families);
-      }
-      for (const [, families] of rowMap) {
-        // Only check rows with 2+ eligible nodes
-        if (families.size >= 1) {
-          // Rows with multiple eligible nodes must have diversity
-          // We check the total eligible count in that row via the map
-          const nodesInRow = eligibleNodes(map.nodes).filter(
-            (n) => rowMap.get(n.rowIndex) === families,
-          );
-          if (nodesInRow.length >= 2) {
-            expect(families.size).toBeGreaterThanOrEqual(2);
-          }
-        }
-      }
-    }
-  });
-
-  test("overall distribution stays roughly 55/45 (RING >= 40%, MODIFIER >= 30%)", () => {
-    // Aggregate across multiple seeds
-    let totalRing = 0;
-    let totalModifier = 0;
-    for (let seed = 0; seed < 50; seed++) {
-      const map = createDelveMap(seed);
-      for (const node of eligibleNodes(map.nodes)) {
-        if (node.rewardFamily === "RING") totalRing++;
-        else if (node.rewardFamily === "RING_MODIFIER_TOKEN") totalModifier++;
-      }
-    }
-    const total = totalRing + totalModifier;
-    expect(total).toBeGreaterThan(0);
-    expect(totalRing / total).toBeGreaterThanOrEqual(0.4);
-    expect(totalModifier / total).toBeGreaterThanOrEqual(0.3);
   });
 });

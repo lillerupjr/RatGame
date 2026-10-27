@@ -36,17 +36,13 @@ function ringOptions(options: ProgressionRewardOption[]): RingRewardOption[] {
 }
 
 describe("progression offer generation", () => {
-  test("generates typed ring and token offers", () => {
+  test("generates typed ring offers", () => {
     const world = stubWorld();
 
     const rings = ringOptions(generateProgressionOffers(world, "RING", "FLOOR_COMPLETION", 3));
     expect(rings).toHaveLength(3);
     expect(rings.every((option) => typeof option.ringDefId === "string")).toBe(true);
     expect(rings.every((option) => typeof option.authoredTier === "string" && typeof option.rolledTier === "string")).toBe(true);
-
-    const tokenOptions = generateProgressionOffers(world, "RING_MODIFIER_TOKEN", "LEVEL_UP", 3);
-    expect(tokenOptions).toHaveLength(3);
-    expect(tokenOptions.filter((option) => option.family === "RING_MODIFIER_TOKEN")).toHaveLength(3);
   });
 
   test("ring offers exclude starter rings and do not duplicate ring ids", () => {
@@ -187,21 +183,4 @@ describe("progression offer generation", () => {
     expect(rings).toHaveLength(3);
   });
 
-  test("hand offers always keep add-finger options visible before empower targets", () => {
-    const world = stubWorld();
-    equipRing(world, "RING_GENERIC_DAMAGE_PERCENT_20", "LEFT:0");
-
-    const handOptions = generateProgressionOffers(world, "HAND_EFFECT", "FLOOR_COMPLETION", 3);
-    expect(handOptions[0]).toMatchObject({
-      family: "HAND_EFFECT",
-      effectType: "ADD_FINGER",
-      handId: "LEFT",
-    });
-    expect(handOptions[1]).toMatchObject({
-      family: "HAND_EFFECT",
-      effectType: "ADD_FINGER",
-      handId: "RIGHT",
-    });
-    expect(handOptions[2].family).toBe("HAND_EFFECT");
-  });
 });

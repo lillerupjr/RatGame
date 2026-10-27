@@ -1,9 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { STAT_KEYS } from "../../combat_mods/stats/statKeys";
-import { RING_FAMILY_IDS, RING_TIER_IDS, type RingTier } from "./ringTypes";
+import { RING_TIER_IDS, type RingTier } from "./ringTypes";
 import {
   RING_DEFS_V1,
-  RING_FAMILY_TALENT_TREES_V1,
   getRingDefById,
   validateRingContent,
 } from "./ringContent";
@@ -146,7 +145,7 @@ const EXPECTED_RING_TIERS = {
 
 describe("ring content validation", () => {
   test("accepts the tiered V1 ring catalog and exact ring id set", () => {
-    expect(validateRingContent(RING_DEFS_V1, RING_FAMILY_TALENT_TREES_V1)).toEqual([]);
+    expect(validateRingContent(RING_DEFS_V1)).toEqual([]);
     expect(RING_DEFS_V1.map((def) => def.id)).toEqual(EXPECTED_RING_IDS);
   });
 
@@ -163,23 +162,9 @@ describe("ring content validation", () => {
     for (const tier of RING_TIER_IDS) {
       const issues = validateRingContent(
         [{ ...RING_DEFS_V1[0], id: `RING_VALID_TIER_${tier}`, tier }],
-        RING_FAMILY_TALENT_TREES_V1,
       );
 
       expect(issues.filter((issue) => issue.path.endsWith(".tier"))).toEqual([]);
-    }
-  });
-
-  test("ships family boon trees for every V1 family", () => {
-    expect(RING_FAMILY_IDS).toContain("health");
-    expect(RING_FAMILY_TALENT_TREES_V1.map((tree) => tree.familyId)).toEqual([...RING_FAMILY_IDS]);
-    // Starter family has no boons; all others have exactly 4
-    const starterTree = RING_FAMILY_TALENT_TREES_V1.find((tree) => tree.familyId === "starter");
-    expect(starterTree?.nodes).toEqual([]);
-    const nonStarterTrees = RING_FAMILY_TALENT_TREES_V1.filter((tree) => tree.familyId !== "starter");
-    expect(nonStarterTrees.length).toBe(RING_FAMILY_IDS.length - 1);
-    for (const tree of nonStarterTrees) {
-      expect(tree.nodes.length).toBe(4);
     }
   });
 
@@ -627,7 +612,7 @@ describe("ring content validation", () => {
     });
   });
 
-  test("rejects missing descriptions, bad tiers, and missing family trees", () => {
+  test("rejects missing descriptions and bad tiers", () => {
     const issues = validateRingContent(
       [
         ...RING_DEFS_V1,
@@ -638,28 +623,10 @@ describe("ring content validation", () => {
           tier: "t9" as RingTier,
         },
       ],
-      RING_FAMILY_TALENT_TREES_V1.filter((tree) => tree.familyId !== "utility").map((tree) =>
-        tree.familyId !== "starter"
-          ? tree
-          : {
-              ...tree,
-              nodes: [
-                {
-                  id: "starter-bad-node",
-                  name: "Bad",
-                  description: "Bad",
-                  requiresNodeIds: [],
-                  cost: 1,
-                  effect: { kind: "STAT_MODIFIERS", mods: [] },
-                },
-              ],
-            },
-      ) as any,
     );
 
     expect(issues.some((issue) => issue.message.includes("Ring description"))).toBe(true);
     expect(issues.some((issue) => issue.message.includes("Ring tier must be one of"))).toBe(true);
-    expect(issues.some((issue) => issue.message.includes("Missing family talent tree"))).toBe(true);
   });
 
   test("rejects invalid triggered and combat-rule effect defs", () => {
@@ -703,7 +670,6 @@ describe("ring content validation", () => {
           },
         },
       ] as any,
-      RING_FAMILY_TALENT_TREES_V1,
     );
 
     expect(issues.some((issue) => issue.message.includes("Unknown trigger key"))).toBe(true);
@@ -746,7 +712,6 @@ describe("ring content validation", () => {
           },
         },
       ] as any,
-      RING_FAMILY_TALENT_TREES_V1,
     );
 
     expect(issues.some((issue) => issue.message.includes("increasedPerMaxLife"))).toBe(true);
@@ -775,7 +740,6 @@ describe("ring content validation", () => {
           },
         },
       ] as any,
-      RING_FAMILY_TALENT_TREES_V1,
     );
 
     expect(issues.some((issue) => issue.message.includes("add must be"))).toBe(true);
@@ -797,7 +761,6 @@ describe("ring content validation", () => {
           },
         },
       ] as any,
-      RING_FAMILY_TALENT_TREES_V1,
     );
 
     expect(issues.some((issue) => issue.message.includes("Unsupported weapon fire rule"))).toBe(true);

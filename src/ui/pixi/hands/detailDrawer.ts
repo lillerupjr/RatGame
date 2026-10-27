@@ -14,13 +14,6 @@ export type DrawerContent = {
   mode: HandsMode;
   familyColor?: number;
   replacingRingName?: string | null;
-  // Token info (selected mode)
-  levelUpTokens?: number;
-  effectTokens?: number;
-  // Talent info (selected mode)
-  unlockedTalentCount?: number;
-  totalTalentCount?: number;
-  availablePassivePoints?: number;
   // Slot/instance context for actions
   slotId?: FingerSlotId | null;
   instanceId?: string | null;
@@ -28,7 +21,6 @@ export type DrawerContent = {
 
 export type DrawerCallbacks = {
   onUnequip?: (slotId: FingerSlotId) => void;
-  onApplyToken?: (instanceId: string, tokenType: "LEVEL_UP" | "INCREASED_EFFECT_20") => void;
 };
 
 export class DetailDrawer extends Container {
@@ -156,27 +148,6 @@ export class DetailDrawer extends Container {
     }
     yPos += 4;
 
-    // Talent info (selected mode only)
-    if (content.mode === "selected" && content.totalTalentCount != null && content.totalTalentCount > 0) {
-      const talentStr = `Talents: ${content.unlockedTalentCount ?? 0}/${content.totalTalentCount}`;
-      const talentText = createTextLabel(talentStr, "statLabel");
-      talentText.y = yPos;
-      this.contentContainer.addChild(talentText);
-
-      if (content.availablePassivePoints != null && content.availablePassivePoints > 0) {
-        const ppStyle = TEXT_STYLES.muted.clone();
-        ppStyle.fill = COLORS.amber;
-        const ppText = new Text({
-          text: `${content.availablePassivePoints} point${content.availablePassivePoints !== 1 ? "s" : ""} available`,
-          style: ppStyle,
-        });
-        ppText.x = talentText.width + 12;
-        ppText.y = yPos;
-        this.contentContainer.addChild(ppText);
-      }
-      yPos += 20;
-    }
-
     // Replacement warning (choose-slot mode, occupied slot)
     if (content.mode === "choose-slot" && content.replacingRingName) {
       const warnStyle = TEXT_STYLES.muted.clone();
@@ -215,7 +186,6 @@ export class DetailDrawer extends Container {
       this.contentContainer.addChild(actionText);
     } else if (content.mode === "selected") {
       // Action buttons row
-      let btnX = 0;
 
       // Unequip button
       if (content.slotId) {
@@ -223,42 +193,9 @@ export class DetailDrawer extends Container {
         const unequipBtn = this.createActionButton("UNEQUIP", COLORS.crimson, () => {
           this.callbacks.onUnequip?.(slotId);
         });
-        unequipBtn.x = btnX;
+        unequipBtn.x = 0;
         unequipBtn.y = yPos;
         this.contentContainer.addChild(unequipBtn);
-        btnX += 90;
-      }
-
-      // Token action buttons
-      if (content.instanceId) {
-        const instanceId = content.instanceId;
-
-        if (content.levelUpTokens != null && content.levelUpTokens > 0) {
-          const lvlBtn = this.createActionButton(
-            `LEVEL UP (${content.levelUpTokens})`,
-            COLORS.amber,
-            () => {
-              this.callbacks.onApplyToken?.(instanceId, "LEVEL_UP");
-            },
-          );
-          lvlBtn.x = btnX;
-          lvlBtn.y = yPos;
-          this.contentContainer.addChild(lvlBtn);
-          btnX += lvlBtn.width + 8;
-        }
-
-        if (content.effectTokens != null && content.effectTokens > 0) {
-          const effBtn = this.createActionButton(
-            `+20% EFFECT (${content.effectTokens})`,
-            COLORS.amber,
-            () => {
-              this.callbacks.onApplyToken?.(instanceId, "INCREASED_EFFECT_20");
-            },
-          );
-          effBtn.x = btnX;
-          effBtn.y = yPos;
-          this.contentContainer.addChild(effBtn);
-        }
       }
     }
   }

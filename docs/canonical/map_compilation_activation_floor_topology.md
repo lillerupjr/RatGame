@@ -52,13 +52,10 @@ Own the conversion from authored map definitions and selected floor intents into
 
 ## Reward Family Assignment
 
-`assignRewardFamilies(seed, nodes)` runs after utility-type assignment (SHOP/REST) and before finalization. It assigns `DelveNode.rewardFamily` to eligible node types (COMBAT, ELITE, QUESTION_MARK). Non-eligible types (REST, SHOP, BOSS) receive no `rewardFamily`.
+`assignRewardFamilies(nodes)` runs after utility-type assignment (SHOP/REST) and before finalization. It assigns `DelveNode.rewardFamily = "RING"` to eligible node types (COMBAT, ELITE, QUESTION_MARK). Non-eligible types (REST, SHOP, BOSS) receive no `rewardFamily`.
 
-- **Pool**: `RING` and `RING_MODIFIER_TOKEN` only (V1). `HAND_EFFECT` excluded until the hand system is built.
-- **Budget**: RING 55%, RING_MODIFIER_TOKEN 45% of total eligible nodes. `Math.ceil(N * 0.55)` goes to RING, remainder to RING_MODIFIER_TOKEN.
-- **Diversity constraint**: Multi-node rows are guaranteed to contain at least 2 distinct families, enabling routing choice. Nodes within each row are shuffled before assignment to avoid lane-position bias.
-- **Determinism**: Uses `RNG(seed ^ hashString("reward-families"))`, fully reproducible per seed.
-- **Fallback**: `routeMapView.ts` and `game.ts` fall back to `defaultRewardFamilyForDepth()` if `node.rewardFamily` is undefined (backwards compatibility with maps generated before this feature).
+- **Pool**: `RING` only (the sole progression reward family).
+- **Fallback**: `routeMapView.ts` and `game.ts` fall back to `"RING"` if `node.rewardFamily` is undefined (backwards compatibility with maps generated before this feature).
 
 ## Invariants
 

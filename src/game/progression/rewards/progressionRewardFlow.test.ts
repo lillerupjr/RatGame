@@ -58,35 +58,6 @@ describe("progressionRewardFlow", () => {
     expect(Object.keys(world.progression.ringsByInstanceId)).toHaveLength(1);
   });
 
-  test("modifier floor stores a V1 ring token instead of applying an instant effect", () => {
-    const world = stubWorld();
-    beginProgressionReward(world, "RING_MODIFIER_TOKEN", "FLOOR_COMPLETION", 3);
-
-    const state = ensureProgressionRewardState(world);
-    expect(state.options).toHaveLength(3);
-    const increasedEffectOption = state.options.find(
-      (option) => option.family === "RING_MODIFIER_TOKEN" && option.tokenType === "INCREASED_EFFECT_20",
-    );
-    expect(increasedEffectOption).toBeTruthy();
-    chooseProgressionReward(world, increasedEffectOption!.id);
-
-    expect(world.progression.storedModifierTokens.INCREASED_EFFECT_20).toBe(1);
-    expect(Object.keys(world.progression.ringsByInstanceId)).toHaveLength(0);
-  });
-
-  test("hand floor applies structural effects immediately", () => {
-    const world = stubWorld();
-    beginProgressionReward(world, "HAND_EFFECT", "FLOOR_COMPLETION", 3);
-
-    const state = ensureProgressionRewardState(world);
-    const addFingerOption = state.options.find(
-      (option) => option.family === "HAND_EFFECT" && option.effectType === "ADD_FINGER" && option.handId === "LEFT",
-    );
-    expect(addFingerOption).toBeTruthy();
-    chooseProgressionReward(world, addFingerOption!.id);
-    expect(world.progression.hands.LEFT.slots).toHaveLength(5);
-  });
-
   test("Selective Hand gives one floor-completion ring reward reroll", () => {
     const world = sequenceWorld([
       0, 0,
@@ -111,19 +82,7 @@ describe("progressionRewardFlow", () => {
     expect(rerollProgressionReward(world)).toBe(false);
   });
 
-  test("Selective Hand does not add rerolls to non-ring or non-floor rewards", () => {
-    const tokenWorld = stubWorld();
-    equipRing(tokenWorld, "RING_UTILITY_SELECTIVE_HAND", "LEFT:0");
-    beginProgressionReward(tokenWorld, "RING_MODIFIER_TOKEN", "FLOOR_COMPLETION", 3);
-    expect(ensureProgressionRewardState(tokenWorld).rerollsRemaining).toBe(0);
-    expect(rerollProgressionReward(tokenWorld)).toBe(false);
-
-    const handWorld = stubWorld();
-    equipRing(handWorld, "RING_UTILITY_SELECTIVE_HAND", "LEFT:0");
-    beginProgressionReward(handWorld, "HAND_EFFECT", "FLOOR_COMPLETION", 3);
-    expect(ensureProgressionRewardState(handWorld).rerollsRemaining).toBe(0);
-    expect(rerollProgressionReward(handWorld)).toBe(false);
-
+  test("Selective Hand does not add rerolls to non-floor rewards", () => {
     const sideObjectiveWorld = stubWorld();
     equipRing(sideObjectiveWorld, "RING_UTILITY_SELECTIVE_HAND", "LEFT:0");
     beginProgressionReward(sideObjectiveWorld, "RING", "SIDE_OBJECTIVE", 3);

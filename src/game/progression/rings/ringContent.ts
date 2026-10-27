@@ -1,5 +1,5 @@
 // @system   ring-progression/system
-// @owns     author, validate, index, and expose ring definitions and family talent trees
+// @owns     author, validate, index, and expose ring definitions
 // @doc      docs/canonical/ring_progression_system.md
 // @agents   no equipped ring state, reward offers, or runtime effect collection; see ringState.ts, progressionOffers.ts, and ringEffects.ts
 
@@ -16,12 +16,9 @@ import type {
   WeaponFireRuleDef,
 } from "../effects/effectTypes";
 import {
-  HAND_EFFECT_TYPES,
   RING_FAMILY_IDS,
   RING_TIER_IDS,
   type RingDef,
-  type RingFamilyTalentTreeDef,
-  type RingTalentNodeDef,
 } from "./ringTypes";
 
 const VALID_MOD_OPS = new Set<ModOp>(["add", "increased", "decreased", "more", "less"]);
@@ -45,14 +42,7 @@ export type RingContentValidationIssue = {
 export type RingContentIndex = {
   ringDefs: RingDef[];
   ringDefsById: Map<string, RingDef>;
-  familyTrees: RingFamilyTalentTreeDef[];
-  familyTreesById: Map<string, RingFamilyTalentTreeDef>;
-  talentNodesById: Map<string, RingTalentNodeDef>;
 };
-
-function makeEmptyTree(familyId: RingFamilyTalentTreeDef["familyId"]): RingFamilyTalentTreeDef {
-  return { familyId, nodes: [] };
-}
 
 function isRingTier(value: unknown): boolean {
   return typeof value === "string" && (RING_TIER_IDS as readonly string[]).includes(value);
@@ -941,154 +931,6 @@ export const RING_DEFS_V1: RingDef[] = [
   },
 ];
 
-function makeBoonNode(
-  familyId: string,
-  index: number,
-  name: string,
-  description: string,
-  mods: StatMod[],
-): RingTalentNodeDef {
-  return {
-    id: `BOON_${familyId.toUpperCase()}_${index}`,
-    name,
-    description,
-    requiresNodeIds: [],
-    cost: 1,
-    effect: { kind: "STAT_MODIFIERS", mods },
-  };
-}
-
-function makeFamilyTree(familyId: RingFamilyTalentTreeDef["familyId"]): RingFamilyTalentTreeDef {
-  switch (familyId) {
-    case "starter":
-      return makeEmptyTree(familyId);
-    case "generic":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Focused Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 2, "Quick Hands", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 3, "Light Feet", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
-        ],
-      };
-    case "physical":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Brute Force", "+15% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
-          makeBoonNode(familyId, 2, "Rapid Blows", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 3, "Precision", "+2% crit chance", [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.02 }]),
-          makeBoonNode(familyId, 4, "Toughness", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
-        ],
-      };
-    case "projectile":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Velocity", "+10% projectile speed", [{ key: STAT_KEYS.PROJECTILE_SPEED_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 2, "Impact", "+10% projectile damage", [{ key: STAT_KEYS.PROJECTILE_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 3, "Rapid Fire", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Sharpness", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-        ],
-      };
-    case "poison":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Virulence", "+15% poison DoT damage", [{ key: STAT_KEYS.DOT_POISON_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
-          makeBoonNode(familyId, 2, "Lingering Toxin", "+10% DoT duration", [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 3, "Toxic Touch", "+5% chance to poison", [{ key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Venomous Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-        ],
-      };
-    case "ignite":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Inferno", "+15% ignite DoT damage", [{ key: STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
-          makeBoonNode(familyId, 2, "Slow Burn", "+10% DoT duration", [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 3, "Kindle", "+5% chance to ignite", [{ key: STAT_KEYS.CHANCE_TO_IGNITE_ADD, op: "add", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Burning Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-        ],
-      };
-    case "dot":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Poison Mastery", "+15% poison DoT damage", [{ key: STAT_KEYS.DOT_POISON_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
-          makeBoonNode(familyId, 2, "Ignite Mastery", "+15% ignite DoT damage", [{ key: STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
-          makeBoonNode(familyId, 3, "Prolonged Agony", "+15% DoT duration", [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.15 }]),
-          makeBoonNode(familyId, 4, "Affliction Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-        ],
-      };
-    case "chaos":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Chaos Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 2, "Chaotic Speed", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 3, "Entropy", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Chaos Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
-        ],
-      };
-    case "crit":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Keen Eye", "+3% crit chance", [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.03 }]),
-          makeBoonNode(familyId, 2, "Devastating Blows", "+15% crit multi", [{ key: STAT_KEYS.CRIT_MULTI_ADD, op: "add", value: 0.15 }]),
-          makeBoonNode(familyId, 3, "Critical Force", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 4, "Lethal Tempo", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-        ],
-      };
-    case "trigger":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Trigger Force", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 2, "Trigger Tempo", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 3, "Trigger Agility", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Trigger Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
-        ],
-      };
-    case "health":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Fortitude", "+20 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 20 }]),
-          makeBoonNode(familyId, 2, "Constitution", "+10% life increased", [{ key: STAT_KEYS.LIFE_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 3, "Resilience", "+5% damage reduction", [{ key: STAT_KEYS.DAMAGE_REDUCTION_ADD, op: "add", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Life Force", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-        ],
-      };
-    case "defense":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Hardened", "+15 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 15 }]),
-          makeBoonNode(familyId, 2, "Iron Skin", "+5% damage reduction", [{ key: STAT_KEYS.DAMAGE_REDUCTION_ADD, op: "add", value: 0.05 }]),
-          makeBoonNode(familyId, 3, "Robust", "+5% life increased", [{ key: STAT_KEYS.LIFE_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 4, "Evasive", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-        ],
-      };
-    case "utility":
-      return {
-        familyId,
-        nodes: [
-          makeBoonNode(familyId, 1, "Swiftness", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 2, "Alacrity", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
-          makeBoonNode(familyId, 3, "Utility Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
-          makeBoonNode(familyId, 4, "Utility Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
-        ],
-      };
-    default:
-      return makeEmptyTree(familyId);
-  }
-}
-
-export const RING_FAMILY_TALENT_TREES_V1: RingFamilyTalentTreeDef[] = RING_FAMILY_IDS.map(makeFamilyTree);
-
 function validateTriggeredAction(
   action: TriggeredEffectActionDef,
   path: string,
@@ -1523,13 +1365,6 @@ function validateEffectDef(effect: EffectDef, path: string, issues: RingContentV
     return;
   }
 
-  if (effect.kind === "HAND_STRUCTURE") {
-    if (!HAND_EFFECT_TYPES.includes(effect.effectType)) {
-      issues.push({ path: `${path}.effectType`, message: `Unknown hand effect type: ${String(effect.effectType)}` });
-    }
-    return;
-  }
-
   if (effect.kind === "MIRROR_LEFT_RING") {
     return;
   }
@@ -1544,97 +1379,9 @@ function validateEffectDef(effect: EffectDef, path: string, issues: RingContentV
   issues.push({ path: `${path}.kind`, message: `Unsupported effect kind: ${String((effect as { kind?: unknown }).kind)}` });
 }
 
-function validateFamilyTreeCycles(tree: RingFamilyTalentTreeDef, issues: RingContentValidationIssue[]): void {
-  const nodesById = new Map<string, RingTalentNodeDef>();
-  for (const node of tree.nodes) {
-    nodesById.set(node.id, node);
-  }
-
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-
-  const visit = (nodeId: string, chain: string[]): void => {
-    if (visited.has(nodeId)) return;
-    if (visiting.has(nodeId)) {
-      issues.push({
-        path: `familyTrees.${tree.familyId}.nodes.${nodeId}`,
-        message: `Cycle detected in prerequisites: ${[...chain, nodeId].join(" -> ")}`,
-      });
-      return;
-    }
-
-    const node = nodesById.get(nodeId);
-    if (!node) return;
-
-    visiting.add(nodeId);
-    for (const requiredId of node.requiresNodeIds) {
-      if (!nodesById.has(requiredId)) continue;
-      visit(requiredId, [...chain, nodeId]);
-    }
-    visiting.delete(nodeId);
-    visited.add(nodeId);
-  };
-
-  for (const node of tree.nodes) {
-    visit(node.id, []);
-  }
-}
-
-export function validateRingContent(
-  ringDefs: readonly RingDef[],
-  familyTrees: readonly RingFamilyTalentTreeDef[],
-): RingContentValidationIssue[] {
+export function validateRingContent(ringDefs: readonly RingDef[]): RingContentValidationIssue[] {
   const issues: RingContentValidationIssue[] = [];
   const ringIds = new Set<string>();
-  const familyIds = new Set<string>();
-  const nodeIds = new Set<string>();
-
-  for (let i = 0; i < familyTrees.length; i++) {
-    const tree = familyTrees[i];
-    const treePath = `familyTrees[${i}]`;
-    if (!RING_FAMILY_IDS.includes(tree.familyId)) {
-      issues.push({ path: `${treePath}.familyId`, message: `Unknown ring family: ${String(tree.familyId)}` });
-    }
-    if (familyIds.has(tree.familyId)) {
-      issues.push({ path: `${treePath}.familyId`, message: `Duplicate family tree: ${tree.familyId}` });
-    }
-    familyIds.add(tree.familyId);
-
-    const localNodeIds = new Set<string>();
-    for (let j = 0; j < tree.nodes.length; j++) {
-      const node = tree.nodes[j];
-      const nodePath = `${treePath}.nodes[${j}]`;
-      if (localNodeIds.has(node.id)) {
-        issues.push({ path: `${nodePath}.id`, message: `Duplicate node id in family ${tree.familyId}: ${node.id}` });
-      }
-      if (nodeIds.has(node.id)) {
-        issues.push({ path: `${nodePath}.id`, message: `Duplicate node id across families: ${node.id}` });
-      }
-      localNodeIds.add(node.id);
-      nodeIds.add(node.id);
-
-      if (!Number.isFinite(node.cost) || node.cost <= 0) {
-        issues.push({ path: `${nodePath}.cost`, message: "Talent node cost must be a positive finite number" });
-      }
-      for (const requiredId of node.requiresNodeIds) {
-        if (!tree.nodes.some((candidate) => candidate.id === requiredId)) {
-          issues.push({
-            path: `${nodePath}.requiresNodeIds`,
-            message: `Missing prerequisite node "${requiredId}" in family ${tree.familyId}`,
-          });
-        }
-      }
-      validateEffectDef(node.effect, `${nodePath}.effect`, issues);
-    }
-
-    validateFamilyTreeCycles(tree, issues);
-  }
-
-  for (const familyId of RING_FAMILY_IDS) {
-    if (!familyIds.has(familyId)) {
-      issues.push({ path: "familyTrees", message: `Missing family talent tree for ${familyId}` });
-    }
-  }
 
   for (let i = 0; i < ringDefs.length; i++) {
     const def = ringDefs[i];
@@ -1645,9 +1392,6 @@ export function validateRingContent(
     ringIds.add(def.id);
     if (!RING_FAMILY_IDS.includes(def.familyId)) {
       issues.push({ path: `${defPath}.familyId`, message: `Unknown ring family: ${String(def.familyId)}` });
-    }
-    if (!familyIds.has(def.familyId)) {
-      issues.push({ path: `${defPath}.familyId`, message: `Missing family talent tree for ${def.familyId}` });
     }
     if (typeof def.name !== "string" || def.name.trim().length <= 0) {
       issues.push({ path: `${defPath}.name`, message: "Ring name must be a non-empty string" });
@@ -1667,11 +1411,8 @@ export function validateRingContent(
   return issues;
 }
 
-export function createRingContentIndex(
-  ringDefs: readonly RingDef[],
-  familyTrees: readonly RingFamilyTalentTreeDef[],
-): RingContentIndex {
-  const issues = validateRingContent(ringDefs, familyTrees);
+export function createRingContentIndex(ringDefs: readonly RingDef[]): RingContentIndex {
+  const issues = validateRingContent(ringDefs);
   if (issues.length > 0) {
     throw new Error(
       [
@@ -1686,25 +1427,13 @@ export function createRingContentIndex(
     ringDefsById.set(def.id, def);
   }
 
-  const familyTreesById = new Map<string, RingFamilyTalentTreeDef>();
-  const talentNodesById = new Map<string, RingTalentNodeDef>();
-  for (const tree of familyTrees) {
-    familyTreesById.set(tree.familyId, tree);
-    for (const node of tree.nodes) {
-      talentNodesById.set(node.id, node);
-    }
-  }
-
   return {
     ringDefs: [...ringDefs],
     ringDefsById,
-    familyTrees: [...familyTrees],
-    familyTreesById,
-    talentNodesById,
   };
 }
 
-const RING_CONTENT_V1 = createRingContentIndex(RING_DEFS_V1, RING_FAMILY_TALENT_TREES_V1);
+const RING_CONTENT_V1 = createRingContentIndex(RING_DEFS_V1);
 
 export function assertProgressionContentValid(): void {
   void RING_CONTENT_V1;
@@ -1714,18 +1443,6 @@ export function getAllRingDefs(): RingDef[] {
   return [...RING_CONTENT_V1.ringDefs];
 }
 
-export function getAllRingFamilyTalentTrees(): RingFamilyTalentTreeDef[] {
-  return [...RING_CONTENT_V1.familyTrees];
-}
-
 export function getRingDefById(id: string): RingDef | undefined {
   return RING_CONTENT_V1.ringDefsById.get(id);
-}
-
-export function getRingFamilyTalentTreeById(familyId: string): RingFamilyTalentTreeDef | undefined {
-  return RING_CONTENT_V1.familyTreesById.get(familyId);
-}
-
-export function getRingTalentNodeById(nodeId: string): RingTalentNodeDef | undefined {
-  return RING_CONTENT_V1.talentNodesById.get(nodeId);
 }

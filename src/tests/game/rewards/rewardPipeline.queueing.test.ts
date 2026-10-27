@@ -6,7 +6,7 @@ import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardS
 import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
 
 describe("durable reward pipeline queueing", () => {
-  test("stores level-up token and queues the floor progression reward", () => {
+  test("level-up grants nothing and the floor progression reward is queued", () => {
     const world = createRewardPipelineWorld(41, "ZONE_TRIAL");
 
     world.runEvents.push(
@@ -17,7 +17,6 @@ describe("durable reward pipeline queueing", () => {
 
     rewardSchedulerSystem(world);
 
-    expect(world.progression.storedModifierTokens.LEVEL_UP).toBe(1);
     expect(world.rewardTickets).toHaveLength(1);
     expect(world.rewardTickets[0].status).toBe("PENDING");
 

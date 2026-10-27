@@ -528,11 +528,6 @@ export function mountPauseMenu(args: {
       tier.textContent = ring.instance.slotId;
       meta.appendChild(tier);
 
-      const stack = document.createElement("span");
-      stack.className = "pauseOwnedStack";
-      stack.textContent = `${ring.unlockedNodes.length} nodes`;
-      meta.appendChild(stack);
-
       row.appendChild(left);
       row.appendChild(meta);
 
@@ -551,7 +546,7 @@ export function mountPauseMenu(args: {
     detailTitle.textContent = selected.ringName;
     const detailMeta = document.createElement("div");
     detailMeta.className = "pauseMeta";
-    detailMeta.textContent = `Instance: ${selected.instance.instanceId} · Slot ${selected.instance.slotId} · ${selected.instance.allocatedPassivePoints} passive points · Scalar ${pct(selected.mainEffectScalar)}`;
+    detailMeta.textContent = `Instance: ${selected.instance.instanceId} · Slot ${selected.instance.slotId} · Scalar ${pct(selected.mainEffectScalar)}`;
 
     ownedDetail.appendChild(detailTitle);
     ownedDetail.appendChild(detailMeta);
@@ -575,12 +570,6 @@ export function mountPauseMenu(args: {
         li.textContent = describeStatMod(mod);
         modList.appendChild(li);
       }
-    }
-
-    if ((selected.slot?.empowermentScalar ?? 0) > 0) {
-      const li = document.createElement("li");
-      li.textContent = `+${Math.round((selected.slot?.empowermentScalar ?? 0) * 100)}% finger empowerment`;
-      modList.appendChild(li);
     }
 
     ownedDetail.appendChild(modList);

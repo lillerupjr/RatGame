@@ -6,10 +6,8 @@
 import { recomputeDerivedStats } from "../../stats/derivedStats";
 import { collectWorldRewardRules } from "../effects/rewardRules";
 import {
-  applyHandEffect,
   ensureRingProgressionState,
   equipRing,
-  grantModifierToken,
   resolveRingEquipTargetSlotId,
 } from "../rings/ringState";
 import type { ProgressionRewardOption } from "./progressionOffers";
@@ -84,26 +82,12 @@ export function beginProgressionReward(
 }
 
 export function applyProgressionRewardOption(world: any, option: ProgressionRewardOption): void {
-  if (option.family === "RING") {
-    const progression = ensureRingProgressionState(world);
-    const slotId = resolveRingEquipTargetSlotId(progression);
-    if (!slotId) {
-      throw new Error("No finger slots available for ring reward");
-    }
-    equipRing(world, option.ringDefId, slotId);
-    recomputeDerivedStats(world);
-    return;
+  const progression = ensureRingProgressionState(world);
+  const slotId = resolveRingEquipTargetSlotId(progression);
+  if (!slotId) {
+    throw new Error("No finger slots available for ring reward");
   }
-
-  if (option.family === "RING_MODIFIER_TOKEN") {
-    grantModifierToken(world, option.tokenType);
-    return;
-  }
-
-  applyHandEffect(world, option.effectType, {
-    handId: option.handId,
-    slotId: option.slotId,
-  });
+  equipRing(world, option.ringDefId, slotId);
   recomputeDerivedStats(world);
 }
 
