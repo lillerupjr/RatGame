@@ -50,7 +50,7 @@ Combat objectives are gated by `COMBAT_SUBTYPE_RUNTIME_ENABLED` in `src/game/map
 
 ## Maps
 
-Authored JSON maps live in `src/game/map/authored/maps/jsonMaps/`.
+Authored JSON maps live in `src/game/map/authored/maps/jsonMaps/`. Every map there is in use; unused and test maps were removed.
 
 | Map file | Map id | Used for |
 |---|---|---|
@@ -62,10 +62,6 @@ Authored JSON maps live in `src/game/map/authored/maps/jsonMaps/`.
 | `boss1.json` | `BOSS1` | **Act boss arena** |
 | `shop.json` | `SHOP` | **Shop node** |
 | `rest.json` | `REST` | **Rest node** |
-| `highway.json` | `highway` | Not in rotation (Map Selector only) |
-| `avenue2.json` | `avenue2` | Not in rotation (Map Selector only) |
-| `vendor_01.json` | `VENDOR_01` | Not in rotation (Map Selector only) |
-| `building.json`, `test_buildings.json`, `batch1_shadow_test.json`, `decals_test.json`, `minimal.json` | — | Test maps (Map Selector only) |
 
 The combat pool is `DEFAULT_MAP_POOL` in `src/game/map/mapIds.ts`; the boss arena is `ACT_BOSS_MAP_POOL` in `src/game/bosses/actBossPlan.ts`.
 

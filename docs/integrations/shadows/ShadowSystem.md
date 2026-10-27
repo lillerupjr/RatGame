@@ -367,16 +367,6 @@ Currently only `batch1` buildings have heightmap PNGs. To add heightmap support 
    ];
    ```
 
-## Testing Map
-
-**File:** `src/game/map/authored/maps/jsonMaps/batch1_shadow_test.json`
-
-An 80x80 sidewalk map with all 24 batch1 assets spaced out for shadow/performance inspection:
-- Rows 1-4: all 24 assets facing S
-- Rows 5-6: direction variants (N, E, W) for buildings 1, 3, 5, 8
-- Spawn at (38, 38)
-- Available from Map Selector as "Batch1 shadow test"
-
 ## Bugs Fixed During Implementation
 
 ### 1. Height/Pixel Scale Mismatch
@@ -407,4 +397,3 @@ Heights are 0.0-1.0 but ray march steps are in pixels (2-4). Without `HEIGHT_UNI
 | `src/game/systems/presentation/debug/debugRenderFlags.ts` | Debug flag resolution |
 | `src/game/systems/presentation/debug/debugRenderTypes.ts` | Debug flag type definitions |
 | `src/game/systems/presentation/contracts/renderCommands.ts` | Render command types |
-| `src/game/map/authored/maps/jsonMaps/batch1_shadow_test.json` | Test map for shadow inspection |

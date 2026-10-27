@@ -681,14 +681,6 @@ describe("structure legacy transition", () => {
     expect(grid.version).not.toBe(prevVersion);
   });
 
-  it("registers avenue2 with the batch processed building pack", () => {
-    const def = getAuthoredMapDefByMapId("avenue2");
-    expect(def).toBeTruthy();
-    expect(def?.buildingPackId).toBe("batch_processed_buildings");
-    expect(BUILDING_PACKS.batch_processed_buildings?.length).toBeGreaterThan(0);
-    expect(BUILDING_SKINS.bp_0?.roof).toBe("structures/buildings/batch_processed/0");
-  });
-
   it("registers industrial as an empty authored building pack", () => {
     const def = getAuthoredMapDefByMapId("industrial");
     expect(def).toBeTruthy();

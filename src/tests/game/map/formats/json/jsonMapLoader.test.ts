@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { loadTableMapDefFromJson } from "../../../../../game/map/formats/json/jsonMapLoader";
-import jsonMinimalMap from "../../../../../game/map/authored/maps/jsonMaps/minimal.json";
+import jsonMinimalMap from "./fixtures/minimal.json";
 import jsonDocksMap from "../../../../../game/map/authored/maps/jsonMaps/docks.json";
 
 describe("jsonMapLoader", () => {
