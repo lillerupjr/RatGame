@@ -32,6 +32,7 @@ These achievements are already true in the current branch and are now canonical:
 * passive ring effects are applied through centralized progression runtime effects
 * triggered ring effects execute through a progression-owned dispatcher
 * combat-rule ring effects execute through a progression-owned combat-rule snapshot
+* weapon-fire ring effects execute through a progression-owned weapon-fire rule snapshot consumed by the player weapon firing path
 * no relic, card, or separate level-up draft runtime path survives in gameplay or UI
 * progression offers are typed backend objects, not string-encoded payload conventions
 * malformed progression state is normalized back onto the locked ring-first baseline
@@ -237,6 +238,7 @@ LOCKED truths:
 * ring main effects and unlocked talent nodes both emit runtime effects
 * triggered ring effects execute through the progression trigger dispatcher
 * `COMBAT_RULES` is the canonical non-passive, non-hand rule surface for combat-owned ring behavior
+* `WEAPON_FIRE_RULES` is the canonical player-weapon firing sidecar surface for ring-owned firing additions such as Backfire Shot
 * `FLOOR_LIFECYCLE` is the canonical non-combat lifecycle surface for committed floor-clear ring effects
 * `REWARD_RULES` is the canonical reward-generation surface for ring-owned reward option count, equipped-family bias, and reward rerolls
 * combat-rule snapshots may use equipped ring-family counts, but ring state remains the only source of equipped family identity
@@ -251,6 +253,7 @@ The current authored trigger action surface includes:
 
 * numeric resource gain actions
 * projectile proc actions
+* direct chain-hit actions
 * death explosion actions
 * ignite spread-on-death actions
 * ignite-from-hit actions

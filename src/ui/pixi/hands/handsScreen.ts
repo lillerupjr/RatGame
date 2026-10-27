@@ -39,6 +39,7 @@ export type HandsScreenController = {
   hide: () => void;
   destroy: () => void;
   isVisible: () => boolean;
+  refresh: () => void;
 };
 
 export async function mountHandsScreen(
@@ -518,6 +519,12 @@ export async function mountHandsScreen(
 
     isVisible() {
       return visible;
+    },
+
+    refresh() {
+      if (!visible || !world) return;
+      refreshSnapshot();
+      applyState();
     },
   };
 }

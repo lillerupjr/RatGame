@@ -75,7 +75,7 @@ describe("progression offer generation", () => {
   });
 
   test("reward-flow generation gently biases Curated Rewards toward equipped families", () => {
-    const world = sequenceWorld([0.5, 0.26]);
+    const world = sequenceWorld([0.5, 0.29]);
     equipRing(world, "RING_UTILITY_CURATED_REWARDS", "LEFT:0");
     equipRing(world, "RING_PHYSICAL_DAMAGE_PERCENT_20", "LEFT:1");
 
@@ -83,7 +83,7 @@ describe("progression offer generation", () => {
 
     expect(ring).toMatchObject({
       rolledTier: "t3",
-      ringDefId: "RING_PHYSICAL_DAMAGE_PERCENT_20",
+      ringDefId: "RING_PHYSICAL_DAMAGE_PERCENT_10",
     });
   });
 
@@ -113,16 +113,30 @@ describe("progression offer generation", () => {
       0, 0,
       0, 0,
       0, 0,
+      0, 0,
+      0, 0,
+      0, 0,
+      0, 0,
+      0, 0,
+      0, 0,
+      0, 0,
     ]);
 
-    const rings = ringOptions(generateProgressionOffers(world, "RING", "FLOOR_COMPLETION", 4));
+    const rings = ringOptions(generateProgressionOffers(world, "RING", "FLOOR_COMPLETION", 11));
 
-    expect(rings.map((option) => option.rolledTier)).toEqual(["t0", "t0", "t0", "t0"]);
-    expect(rings.map((option) => option.authoredTier)).toEqual(["t0", "t0", "t0", "t3"]);
+    expect(rings.map((option) => option.rolledTier)).toEqual(["t0", "t0", "t0", "t0", "t0", "t0", "t0", "t0", "t0", "t0", "t0"]);
+    expect(rings.map((option) => option.authoredTier)).toEqual(["t0", "t0", "t0", "t0", "t0", "t0", "t0", "t0", "t0", "t0", "t3"]);
     expect(rings.map((option) => option.ringDefId)).toEqual([
       "RING_PROJECTILE_SCATTER_SHOT",
+      "RING_PROJECTILE_BACKFIRE_SHOT",
       "RING_TRIGGER_BAZOOKA_ON_HIT",
+      "RING_TRIGGER_LIGHTNING_CHAIN",
       "RING_TRIGGER_DOUBLE_TRIGGERS",
+      "RING_POISON_PLAGUE_DETONATION",
+      "RING_CRIT_CRITICAL_SPRINT",
+      "RING_UTILITY_MIRROR_BAND",
+      "RING_UTILITY_AMPLIFYING_BAND",
+      "RING_IGNITE_LIVING_BOMB",
       "RING_GENERIC_DAMAGE_PERCENT_20",
     ]);
   });
@@ -137,6 +151,40 @@ describe("progression offer generation", () => {
       authoredTier: "t0",
       rolledTier: "t0",
     });
+  });
+
+  test("excludes already-equipped ring defs from offers", () => {
+    const world = stubWorld(42);
+    equipRing(world, "RING_GENERIC_DAMAGE_PERCENT_20", "LEFT:0");
+    equipRing(world, "RING_PHYSICAL_DAMAGE_PERCENT_20", "LEFT:1");
+
+    const rings = ringOptions(generateProgressionOffers(world, "RING", "FLOOR_COMPLETION", 3));
+    const ringDefIds = rings.map((option) => option.ringDefId);
+
+    expect(rings).toHaveLength(3);
+    expect(ringDefIds).not.toContain("RING_GENERIC_DAMAGE_PERCENT_20");
+    expect(ringDefIds).not.toContain("RING_PHYSICAL_DAMAGE_PERCENT_20");
+  });
+
+  test("falls back to full pool when too few non-equipped candidates", () => {
+    const world = stubWorld(99);
+    // Populate ringsByInstanceId directly to simulate many equipped rings
+    // without needing valid finger slots for each one
+    const helperWorld = stubWorld(1);
+    const allRings = ringOptions(generateProgressionOffers(helperWorld, "RING", "FLOOR_COMPLETION", 50));
+    const state = world.progression;
+    for (let i = 0; i < allRings.length - 1; i++) {
+      state.ringsByInstanceId[`fake-${i}`] = {
+        instanceId: `fake-${i}`,
+        defId: allRings[i].ringDefId,
+        slotId: "LEFT:0",
+      };
+    }
+
+    const rings = ringOptions(generateProgressionOffers(world, "RING", "FLOOR_COMPLETION", 3));
+
+    // Should still produce 3 options by falling back to the full pool
+    expect(rings).toHaveLength(3);
   });
 
   test("hand offers always keep add-finger options visible before empower targets", () => {

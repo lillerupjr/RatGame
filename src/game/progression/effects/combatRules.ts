@@ -7,6 +7,7 @@ import { collectWorldRingFamilyCounts, collectWorldRingRuntimeEffects } from "..
 import type {
   CombatRuleDef,
   RuntimeEffect,
+  TriggerDamageType,
 } from "./effectTypes";
 
 export type TypedHitDamage = {
@@ -33,6 +34,7 @@ export type CombatRulesSnapshot = {
     rangePx: number;
     increased: number;
   } | null;
+  projectileHitDamageIncreasedPerPiercedEnemy: number;
   physicalHitDamageIncreased: number;
   suppressNonPhysicalHitDamage: boolean;
   critRollsTwice: boolean;
@@ -42,6 +44,46 @@ export type CombatRulesSnapshot = {
   doubleTriggers: boolean;
   triggerProcChanceIncreased: number;
   retryFailedTriggerProcsOnce: boolean;
+  poisonedEnemiesExplodeOnDeath: {
+    radius: number;
+    damageScalar: number;
+    damageType: TriggerDamageType;
+  } | null;
+  burningEnemiesMoveSpeedReduced: number;
+  poisonedEnemiesDamageReduced: number;
+  poisonTrail: {
+    radius: number;
+    poisonDps: number;
+    tickEvery: number;
+    trailTtl: number;
+    dropEvery: number;
+  } | null;
+  laserExecutor: {
+    thresholdFraction: number;
+    rangePx: number;
+    scanEvery: number;
+  } | null;
+  physicalHitStunChance: {
+    chance: number;
+    stunDurationSec: number;
+  } | null;
+  timedNextShotEmpower: {
+    chargeEvery: number;
+    physicalDamageIncreased: number;
+  } | null;
+  killEmpowerNextShot: {
+    damageIncreased: number;
+  } | null;
+  critMoveSpeedBuff: {
+    moveSpeedIncreased: number;
+    durationSec: number;
+  } | null;
+  livingBomb: {
+    markEvery: number;
+    speedIncreased: number;
+    explosionDamageScalar: number;
+    explosionRadius: number;
+  } | null;
 };
 
 function clamp01(value: number): number {
@@ -86,10 +128,62 @@ export function scaleCombatRule(
       return { ...rule, increased: scaleValue(rule.increased, increasedEffectScalar) };
     case "PHYSICAL_HIT_DAMAGE_INCREASED_PER_EQUIPPED_FAMILY_RING":
       return { ...rule, increasedPerRing: scaleValue(rule.increasedPerRing, increasedEffectScalar) };
+    case "PROJECTILE_HIT_DAMAGE_INCREASED_PER_PIERCED_ENEMY":
+      return { ...rule, increasedPerEnemy: scaleValue(rule.increasedPerEnemy, increasedEffectScalar) };
     case "POISON_EXTRA_STACK_CHANCE":
       return { ...rule, chance: clamp01(scaleValue(rule.chance, increasedEffectScalar)) };
     case "TRIGGER_PROC_CHANCE_INCREASED":
       return { ...rule, increased: scaleValue(rule.increased, increasedEffectScalar) };
+    case "POISONED_ENEMIES_EXPLODE_ON_DEATH":
+      return {
+        ...rule,
+        damageScalar: scaleValue(rule.damageScalar, increasedEffectScalar),
+        radius: scaleValue(rule.radius, increasedEffectScalar),
+      };
+    case "BURNING_ENEMIES_MOVE_SPEED_REDUCED":
+      return { ...rule, reduced: scaleValue(rule.reduced, increasedEffectScalar) };
+    case "POISONED_ENEMIES_DAMAGE_REDUCED":
+      return { ...rule, reduced: scaleValue(rule.reduced, increasedEffectScalar) };
+    case "POISON_TRAIL":
+      return {
+        ...rule,
+        radius: scaleValue(rule.radius, increasedEffectScalar),
+        poisonDps: scaleValue(rule.poisonDps, increasedEffectScalar),
+      };
+    case "LASER_EXECUTOR":
+      return {
+        ...rule,
+        rangePx: scaleValue(rule.rangePx, increasedEffectScalar),
+        thresholdFraction: clamp01(scaleValue(rule.thresholdFraction, increasedEffectScalar)),
+      };
+    case "PHYSICAL_HIT_STUN_CHANCE":
+      return {
+        ...rule,
+        chance: clamp01(scaleValue(rule.chance, increasedEffectScalar)),
+        stunDurationSec: scaleValue(rule.stunDurationSec, increasedEffectScalar),
+      };
+    case "TIMED_NEXT_SHOT_EMPOWER":
+      return {
+        ...rule,
+        physicalDamageIncreased: scaleValue(rule.physicalDamageIncreased, increasedEffectScalar),
+      };
+    case "KILL_EMPOWER_NEXT_SHOT":
+      return {
+        ...rule,
+        damageIncreased: scaleValue(rule.damageIncreased, increasedEffectScalar),
+      };
+    case "CRIT_MOVE_SPEED_BUFF":
+      return {
+        ...rule,
+        moveSpeedIncreased: scaleValue(rule.moveSpeedIncreased, increasedEffectScalar),
+        durationSec: scaleValue(rule.durationSec, increasedEffectScalar),
+      };
+    case "LIVING_BOMB":
+      return {
+        ...rule,
+        explosionDamageScalar: scaleValue(rule.explosionDamageScalar, increasedEffectScalar),
+        explosionRadius: scaleValue(rule.explosionRadius, increasedEffectScalar),
+      };
     default:
       return rule;
   }
@@ -126,6 +220,7 @@ export function buildCombatRulesSnapshot(
     pointBlankDamageFalloff: null,
     pointBlankCloseHitKnockback: null,
     noPierceNearbyHitDamageIncreased: null,
+    projectileHitDamageIncreasedPerPiercedEnemy: 0,
     physicalHitDamageIncreased: 0,
     suppressNonPhysicalHitDamage: false,
     critRollsTwice: false,
@@ -135,6 +230,16 @@ export function buildCombatRulesSnapshot(
     doubleTriggers: false,
     triggerProcChanceIncreased: 0,
     retryFailedTriggerProcsOnce: false,
+    poisonedEnemiesExplodeOnDeath: null,
+    burningEnemiesMoveSpeedReduced: 0,
+    poisonedEnemiesDamageReduced: 0,
+    poisonTrail: null,
+    laserExecutor: null,
+    physicalHitStunChance: null,
+    timedNextShotEmpower: null,
+    killEmpowerNextShot: null,
+    critMoveSpeedBuff: null,
+    livingBomb: null,
   };
 
   for (const rule of rules) {
@@ -210,6 +315,9 @@ export function buildCombatRulesSnapshot(
         snapshot.physicalHitDamageIncreased += equippedCount * Math.max(0, rule.increasedPerRing);
         break;
       }
+      case "PROJECTILE_HIT_DAMAGE_INCREASED_PER_PIERCED_ENEMY":
+        snapshot.projectileHitDamageIncreasedPerPiercedEnemy += Math.max(0, rule.increasedPerEnemy);
+        break;
       case "CRIT_ROLLS_TWICE":
         snapshot.critRollsTwice = true;
         break;
@@ -232,6 +340,137 @@ export function buildCombatRulesSnapshot(
         break;
       case "RETRY_FAILED_TRIGGER_PROCS_ONCE":
         snapshot.retryFailedTriggerProcsOnce = true;
+        break;
+      case "POISONED_ENEMIES_EXPLODE_ON_DEATH":
+        if (!snapshot.poisonedEnemiesExplodeOnDeath) {
+          snapshot.poisonedEnemiesExplodeOnDeath = {
+            radius: Math.max(0, rule.radius),
+            damageScalar: Math.max(0, rule.damageScalar),
+            damageType: rule.damageType,
+          };
+        } else {
+          snapshot.poisonedEnemiesExplodeOnDeath.radius = Math.max(
+            snapshot.poisonedEnemiesExplodeOnDeath.radius,
+            Math.max(0, rule.radius),
+          );
+          snapshot.poisonedEnemiesExplodeOnDeath.damageScalar = Math.max(
+            snapshot.poisonedEnemiesExplodeOnDeath.damageScalar,
+            Math.max(0, rule.damageScalar),
+          );
+        }
+        break;
+      case "BURNING_ENEMIES_MOVE_SPEED_REDUCED":
+        snapshot.burningEnemiesMoveSpeedReduced += Math.max(0, rule.reduced);
+        break;
+      case "POISONED_ENEMIES_DAMAGE_REDUCED":
+        snapshot.poisonedEnemiesDamageReduced += Math.max(0, rule.reduced);
+        break;
+      case "POISON_TRAIL":
+        if (!snapshot.poisonTrail) {
+          snapshot.poisonTrail = {
+            radius: Math.max(0, rule.radius),
+            poisonDps: Math.max(0, rule.poisonDps),
+            tickEvery: Math.max(0.02, rule.tickEvery),
+            trailTtl: Math.max(0, rule.trailTtl),
+            dropEvery: Math.max(0.02, rule.dropEvery),
+          };
+        } else {
+          snapshot.poisonTrail.poisonDps = Math.max(snapshot.poisonTrail.poisonDps, Math.max(0, rule.poisonDps));
+          snapshot.poisonTrail.radius = Math.max(snapshot.poisonTrail.radius, Math.max(0, rule.radius));
+        }
+        break;
+      case "LASER_EXECUTOR":
+        if (!snapshot.laserExecutor) {
+          snapshot.laserExecutor = {
+            thresholdFraction: clamp01(Math.max(0, rule.thresholdFraction)),
+            rangePx: Math.max(0, rule.rangePx),
+            scanEvery: Math.max(0.1, rule.scanEvery),
+          };
+        } else {
+          snapshot.laserExecutor.thresholdFraction = clamp01(
+            Math.max(snapshot.laserExecutor.thresholdFraction, Math.max(0, rule.thresholdFraction)),
+          );
+          snapshot.laserExecutor.rangePx = Math.max(snapshot.laserExecutor.rangePx, Math.max(0, rule.rangePx));
+          snapshot.laserExecutor.scanEvery = Math.min(snapshot.laserExecutor.scanEvery, Math.max(0.1, rule.scanEvery));
+        }
+        break;
+      case "PHYSICAL_HIT_STUN_CHANCE":
+        if (!snapshot.physicalHitStunChance) {
+          snapshot.physicalHitStunChance = {
+            chance: clamp01(Math.max(0, rule.chance)),
+            stunDurationSec: Math.max(0, rule.stunDurationSec),
+          };
+        } else {
+          snapshot.physicalHitStunChance.chance = clamp01(
+            Math.max(snapshot.physicalHitStunChance.chance, Math.max(0, rule.chance)),
+          );
+          snapshot.physicalHitStunChance.stunDurationSec = Math.max(
+            snapshot.physicalHitStunChance.stunDurationSec,
+            Math.max(0, rule.stunDurationSec),
+          );
+        }
+        break;
+      case "TIMED_NEXT_SHOT_EMPOWER":
+        if (!snapshot.timedNextShotEmpower) {
+          snapshot.timedNextShotEmpower = {
+            chargeEvery: Math.max(0.1, rule.chargeEvery),
+            physicalDamageIncreased: Math.max(0, rule.physicalDamageIncreased),
+          };
+        } else {
+          snapshot.timedNextShotEmpower.chargeEvery = Math.min(
+            snapshot.timedNextShotEmpower.chargeEvery,
+            Math.max(0.1, rule.chargeEvery),
+          );
+          snapshot.timedNextShotEmpower.physicalDamageIncreased = Math.max(
+            snapshot.timedNextShotEmpower.physicalDamageIncreased,
+            Math.max(0, rule.physicalDamageIncreased),
+          );
+        }
+        break;
+      case "KILL_EMPOWER_NEXT_SHOT":
+        if (!snapshot.killEmpowerNextShot) {
+          snapshot.killEmpowerNextShot = {
+            damageIncreased: Math.max(0, rule.damageIncreased),
+          };
+        } else {
+          snapshot.killEmpowerNextShot.damageIncreased += Math.max(0, rule.damageIncreased);
+        }
+        break;
+      case "CRIT_MOVE_SPEED_BUFF":
+        if (!snapshot.critMoveSpeedBuff) {
+          snapshot.critMoveSpeedBuff = {
+            moveSpeedIncreased: Math.max(0, rule.moveSpeedIncreased),
+            durationSec: Math.max(0, rule.durationSec),
+          };
+        } else {
+          snapshot.critMoveSpeedBuff.moveSpeedIncreased = Math.max(
+            snapshot.critMoveSpeedBuff.moveSpeedIncreased,
+            Math.max(0, rule.moveSpeedIncreased),
+          );
+          snapshot.critMoveSpeedBuff.durationSec = Math.max(
+            snapshot.critMoveSpeedBuff.durationSec,
+            Math.max(0, rule.durationSec),
+          );
+        }
+        break;
+      case "LIVING_BOMB":
+        if (!snapshot.livingBomb) {
+          snapshot.livingBomb = {
+            markEvery: Math.max(0.1, rule.markEvery),
+            speedIncreased: Math.max(0, rule.speedIncreased),
+            explosionDamageScalar: Math.max(0, rule.explosionDamageScalar),
+            explosionRadius: Math.max(0, rule.explosionRadius),
+          };
+        } else {
+          snapshot.livingBomb.explosionDamageScalar = Math.max(
+            snapshot.livingBomb.explosionDamageScalar,
+            Math.max(0, rule.explosionDamageScalar),
+          );
+          snapshot.livingBomb.explosionRadius = Math.max(
+            snapshot.livingBomb.explosionRadius,
+            Math.max(0, rule.explosionRadius),
+          );
+        }
         break;
     }
   }
@@ -275,6 +514,22 @@ export function applyPhysicalHitDamageIncreased(
     physical: Math.max(0, damage.physical) * scale,
     fire: Math.max(0, damage.fire),
     chaos: Math.max(0, damage.chaos),
+  };
+}
+
+export function applyProjectilePiercedEnemyDamageIncreased(
+  damage: TypedHitDamage,
+  rules: CombatRulesSnapshot,
+  piercedEnemyCount: number,
+): TypedHitDamage {
+  const count = Math.max(0, Math.floor(piercedEnemyCount));
+  const increased = Math.max(0, rules.projectileHitDamageIncreasedPerPiercedEnemy);
+  if (count <= 0 || increased <= 0) return damage;
+  const scale = 1 + count * increased;
+  return {
+    physical: Math.max(0, damage.physical) * scale,
+    fire: Math.max(0, damage.fire) * scale,
+    chaos: Math.max(0, damage.chaos) * scale,
   };
 }
 

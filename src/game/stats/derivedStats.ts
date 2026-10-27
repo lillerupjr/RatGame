@@ -114,6 +114,11 @@ export function recomputeDerivedStats(w: World) {
     rounding: "none",
   });
 
+  const critMoveSpeedBuff = (w as any)._critMoveSpeedBuff;
+  if (critMoveSpeedBuff && critMoveSpeedBuff.tLeft > 0 && critMoveSpeedBuff.increased > 0) {
+    w.pSpeed *= (1 + critMoveSpeedBuff.increased);
+  }
+
   w.playerHp = Math.min(w.playerHp, w.playerHpMax);
   w.currentArmor = prevCurrentArmor;
   w.maxArmor = Math.max(0, w.maxArmor);

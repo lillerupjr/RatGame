@@ -148,6 +148,68 @@ describe("progression triggered effects", () => {
     expect(world.prDmgChaos[missileIndex]).toBe(0);
   });
 
+  test("Lightning Chain hits up to three other nearby enemies with matched hit damage", () => {
+    const world = createWorld({ seed: 1033, stage: stageDocks });
+    equipRing(world, "RING_TRIGGER_LIGHTNING_CHAIN", "LEFT:0");
+    forceRolls(world, [0]);
+
+    const origin = spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 10, 9);
+    const b = spawnEnemyGrid(world, EnemyId.MINION, 11, 9);
+    const c = spawnEnemyGrid(world, EnemyId.MINION, 12, 9);
+    const distant = spawnEnemyGrid(world, EnemyId.MINION, 20, 20);
+    rebuildEnemyHash(world);
+    for (const enemyIndex of [origin, a, b, c, distant]) {
+      world.eHp[enemyIndex] = 100;
+      world.eHpMax[enemyIndex] = 100;
+    }
+    const originWorld = getEnemyWorld(world, origin, KENNEY_TILE_WORLD);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: origin,
+      damage: 10,
+      dmgPhys: 4,
+      dmgFire: 0,
+      dmgChaos: 6,
+      x: originWorld.wx,
+      y: originWorld.wy,
+      isCrit: false,
+      damageMeta: makeWeaponHitMeta("test-weapon", { category: "HIT", instigatorId: "player", isProcDamage: false }),
+    });
+    processProgressionTriggeredEffects(world);
+
+    const chainHits = world.events.filter(
+      (event) => event.type === "ENEMY_HIT" && (event as any).damageMeta?.isProcDamage,
+    ) as any[];
+    expect(chainHits).toHaveLength(3);
+    expect(new Set(chainHits.map((event) => event.enemyIndex))).toEqual(new Set([a, b, c]));
+    expect(chainHits.some((event) => event.enemyIndex === origin)).toBe(false);
+    expect(chainHits.every((event) => event.dmgPhys === 4 && event.dmgChaos === 6)).toBe(true);
+    expect(world.eHp[distant]).toBe(100);
+  });
+
+  test("Lightning Chain does not fire when the proc roll fails", () => {
+    const world = createWorld({ seed: 1034, stage: stageDocks });
+    equipRing(world, "RING_TRIGGER_LIGHTNING_CHAIN", "LEFT:0");
+    forceRolls(world, [0.9]);
+
+    const origin = spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    const nearby = spawnEnemyGrid(world, EnemyId.MINION, 10, 9);
+    rebuildEnemyHash(world);
+    world.eHp[nearby] = 100;
+    const originWorld = getEnemyWorld(world, origin, KENNEY_TILE_WORLD);
+
+    world.events.push(playerHitEvent(origin, 10, originWorld.wx, originWorld.wy));
+    processProgressionTriggeredEffects(world);
+
+    const chainHits = world.events.filter(
+      (event) => event.type === "ENEMY_HIT" && (event as any).damageMeta?.isProcDamage,
+    );
+    expect(chainHits).toHaveLength(0);
+    expect(world.eHp[nearby]).toBe(100);
+  });
+
   test("triggered explosion damages nearby enemies on kill", () => {
     const world = createWorld({ seed: 104, stage: stageDocks });
     equipRing(world, "RING_TRIGGER_EXPLODE_ON_KILL", "LEFT:0");
@@ -217,6 +279,28 @@ describe("progression triggered effects", () => {
     processProgressionTriggeredEffects(world);
 
     expect(world.eAilments?.[enemy]?.ignite?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  test("Retaliation Burst stuns nearby enemies on PLAYER_HIT event", () => {
+    const world = createWorld({ seed: 108, stage: stageDocks });
+    equipRing(world, "RING_PHYSICAL_RETALIATION_BURST", "LEFT:0");
+    forceRolls(world, [0]);
+
+    // Spawn enemy at grid (9,9) and move the player near it so the stun explosion reaches
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    // Position the player at the enemy's grid location (close enough for 120px radius)
+    world.pgxi = 9;
+    world.pgyi = 9;
+    world.pgox = 0;
+    world.pgoy = 0;
+    rebuildEnemyHash(world);
+
+    world.events.push({ type: "PLAYER_HIT", damage: 10, source: "ENEMY" } as any);
+    processProgressionTriggeredEffects(world);
+
+    const brain = (world as any).eBrain?.[a];
+    expect(brain).toBeDefined();
+    expect(brain.stunLeftSec).toBeCloseTo(1);
   });
 
   test("triggered hits inherit player ailment chances only when the DOT rule is equipped", () => {

@@ -407,6 +407,11 @@ export function unlockRingTalentNode(world: any, ringInstanceId: string, nodeId:
   return instance;
 }
 
+export function applyBoonToRing(world: any, ringInstanceId: string, nodeId: string): RingInstance {
+  const instance = applyModifierTokenToRing(world, "LEVEL_UP", ringInstanceId);
+  return unlockRingTalentNode(world, ringInstanceId, nodeId);
+}
+
 export function canApplyHandEffect(
   world: any,
   effectType: HandEffectType,

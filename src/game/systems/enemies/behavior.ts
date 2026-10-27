@@ -60,6 +60,11 @@ export function enemyBehaviorSystem(w: World, dt: number): void {
     const brain = ensureEnemyBrain(w, i);
     if (brain.state === "dead") continue;
 
+    if (brain.stunLeftSec > 0) {
+      brain.stunLeftSec = Math.max(0, brain.stunLeftSec - dt);
+      continue;
+    }
+
     brain.stateTimeSec += dt;
     brain.cooldownLeftSec = Math.max(0, brain.cooldownLeftSec - dt);
 

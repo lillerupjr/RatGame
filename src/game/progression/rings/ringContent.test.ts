@@ -27,9 +27,11 @@ const EXPECTED_RING_IDS = [
   "RING_PHYSICAL_DEVOTION",
   "RING_PROJECTILE_ADDITIONAL_PROJECTILES_1",
   "RING_PROJECTILE_GAIN_PIERCE_1",
+  "RING_PROJECTILE_PIERCING_MOMENTUM",
   "RING_PROJECTILE_DAMAGE_INCREASED_10",
   "RING_PROJECTILE_BOUNCE_ADD_1",
   "RING_PROJECTILE_SCATTER_SHOT",
+  "RING_PROJECTILE_BACKFIRE_SHOT",
   "RING_PROJECTILE_CLOSE_QUARTERS_GUARD",
   "RING_DOT_DAMAGE_OVER_TIME_MORE_50",
   "RING_DOT_SPECIALIST",
@@ -44,6 +46,7 @@ const EXPECTED_RING_IDS = [
   "RING_CRIT_ROLLS_TWICE",
   "RING_CRIT_CHANCE_PERCENT_5",
   "RING_TRIGGER_BAZOOKA_ON_HIT",
+  "RING_TRIGGER_LIGHTNING_CHAIN",
   "RING_TRIGGER_SPARK_ON_HIT",
   "RING_TRIGGER_EXPLODE_ON_KILL",
   "RING_TRIGGER_DAGGER_ON_KILL",
@@ -58,6 +61,19 @@ const EXPECTED_RING_IDS = [
   "RING_UTILITY_WIDER_SELECTION",
   "RING_UTILITY_CURATED_REWARDS",
   "RING_UTILITY_SELECTIVE_HAND",
+  "RING_POISON_POISON_TRAIL",
+  "RING_IGNITE_LASER_EXECUTOR",
+  "RING_POISON_PLAGUE_DETONATION",
+  "RING_IGNITE_SMOLDERING_DRAG",
+  "RING_POISON_WEAKENING_VENOM",
+  "RING_PHYSICAL_RETALIATION_BURST",
+  "RING_PHYSICAL_STAGGERING_BLOWS",
+  "RING_PHYSICAL_HEAVY_CHAMBER",
+  "RING_GENERIC_KILL_MOMENTUM",
+  "RING_CRIT_CRITICAL_SPRINT",
+  "RING_UTILITY_MIRROR_BAND",
+  "RING_UTILITY_AMPLIFYING_BAND",
+  "RING_IGNITE_LIVING_BOMB",
 ] as const;
 
 const EXPECTED_RING_TIERS = {
@@ -79,9 +95,11 @@ const EXPECTED_RING_TIERS = {
   RING_PHYSICAL_DEVOTION: "t1",
   RING_PROJECTILE_ADDITIONAL_PROJECTILES_1: "t1",
   RING_PROJECTILE_GAIN_PIERCE_1: "t2",
+  RING_PROJECTILE_PIERCING_MOMENTUM: "t1",
   RING_PROJECTILE_DAMAGE_INCREASED_10: "t3",
   RING_PROJECTILE_BOUNCE_ADD_1: "t1",
   RING_PROJECTILE_SCATTER_SHOT: "t0",
+  RING_PROJECTILE_BACKFIRE_SHOT: "t0",
   RING_PROJECTILE_CLOSE_QUARTERS_GUARD: "t2",
   RING_DOT_DAMAGE_OVER_TIME_MORE_50: "t2",
   RING_DOT_SPECIALIST: "t1",
@@ -96,6 +114,7 @@ const EXPECTED_RING_TIERS = {
   RING_CRIT_ROLLS_TWICE: "t1",
   RING_CRIT_CHANCE_PERCENT_5: "t3",
   RING_TRIGGER_BAZOOKA_ON_HIT: "t0",
+  RING_TRIGGER_LIGHTNING_CHAIN: "t0",
   RING_TRIGGER_SPARK_ON_HIT: "t2",
   RING_TRIGGER_EXPLODE_ON_KILL: "t1",
   RING_TRIGGER_DAGGER_ON_KILL: "t2",
@@ -110,6 +129,19 @@ const EXPECTED_RING_TIERS = {
   RING_UTILITY_WIDER_SELECTION: "t1",
   RING_UTILITY_CURATED_REWARDS: "t1",
   RING_UTILITY_SELECTIVE_HAND: "t1",
+  RING_POISON_POISON_TRAIL: "t2",
+  RING_IGNITE_LASER_EXECUTOR: "t1",
+  RING_POISON_PLAGUE_DETONATION: "t0",
+  RING_IGNITE_SMOLDERING_DRAG: "t3",
+  RING_POISON_WEAKENING_VENOM: "t2",
+  RING_PHYSICAL_RETALIATION_BURST: "t2",
+  RING_PHYSICAL_STAGGERING_BLOWS: "t3",
+  RING_PHYSICAL_HEAVY_CHAMBER: "t2",
+  RING_GENERIC_KILL_MOMENTUM: "t2",
+  RING_CRIT_CRITICAL_SPRINT: "t0",
+  RING_UTILITY_MIRROR_BAND: "t0",
+  RING_UTILITY_AMPLIFYING_BAND: "t0",
+  RING_IGNITE_LIVING_BOMB: "t0",
 } satisfies Record<(typeof EXPECTED_RING_IDS)[number], RingTier>;
 
 describe("ring content validation", () => {
@@ -138,11 +170,17 @@ describe("ring content validation", () => {
     }
   });
 
-  test("ships empty family trees for every V1 family", () => {
+  test("ships family boon trees for every V1 family", () => {
     expect(RING_FAMILY_IDS).toContain("health");
     expect(RING_FAMILY_TALENT_TREES_V1.map((tree) => tree.familyId)).toEqual([...RING_FAMILY_IDS]);
-    expect(RING_FAMILY_TALENT_TREES_V1.every((tree) => tree.nodes.length === 0)).toBe(true);
-    expect(RING_FAMILY_TALENT_TREES_V1.find((tree) => tree.familyId === "health")?.nodes).toEqual([]);
+    // Starter family has no boons; all others have exactly 4
+    const starterTree = RING_FAMILY_TALENT_TREES_V1.find((tree) => tree.familyId === "starter");
+    expect(starterTree?.nodes).toEqual([]);
+    const nonStarterTrees = RING_FAMILY_TALENT_TREES_V1.filter((tree) => tree.familyId !== "starter");
+    expect(nonStarterTrees.length).toBe(RING_FAMILY_IDS.length - 1);
+    for (const tree of nonStarterTrees) {
+      expect(tree.nodes.length).toBe(4);
+    }
   });
 
   test("keeps recovered starter names and descriptions from git history", () => {
@@ -338,6 +376,50 @@ describe("ring content validation", () => {
     });
   });
 
+  test("includes projectile/trigger mechanics mini-batch rings with exact effects", () => {
+    expect(getRingDefById("RING_PROJECTILE_PIERCING_MOMENTUM")).toMatchObject({
+      name: "Piercing Momentum",
+      description: "Projectiles gain 30% increased damage for each enemy they have pierced.",
+      tier: "t1",
+      familyId: "projectile",
+      tags: ["projectile", "pierce", "damage"],
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "PROJECTILE_HIT_DAMAGE_INCREASED_PER_PIERCED_ENEMY", increasedPerEnemy: 0.3 }],
+      },
+    });
+    expect(getRingDefById("RING_PROJECTILE_BACKFIRE_SHOT")).toMatchObject({
+      name: "Backfire Shot",
+      description: "Also fire a projectile behind you. This projectile is not modified by projectile count.",
+      tier: "t0",
+      familyId: "projectile",
+      tags: ["projectile", "chase", "backfire"],
+      mainEffect: {
+        kind: "WEAPON_FIRE_RULES",
+        rules: [{ kind: "BACKFIRE_PROJECTILE" }],
+      },
+    });
+    expect(getRingDefById("RING_TRIGGER_LIGHTNING_CHAIN")).toMatchObject({
+      name: "Lightning Chain",
+      description: "On hit: 25% chance to chain lightning to up to 3 other targets, dealing 100% of hit damage to each.",
+      tier: "t0",
+      familyId: "trigger",
+      tags: ["trigger", "lightning", "chain"],
+      mainEffect: {
+        kind: "TRIGGERED",
+        triggerKey: "ON_HIT",
+        procChance: 0.25,
+        action: {
+          kind: "CHAIN_HIT",
+          maxTargets: 3,
+          jumpRangePx: 220,
+          damageScalar: 1,
+          damageType: "MATCH_HIT",
+        },
+      },
+    });
+  });
+
   test("includes health floor lifecycle mini-batch rings with exact effects", () => {
     expect(getRingDefById("RING_HEALTH_FLOOR_RECOVERY")).toMatchObject({
       name: "Floor Recovery",
@@ -411,7 +493,141 @@ describe("ring content validation", () => {
     });
   });
 
-  test("rejects missing descriptions, bad tiers, missing family trees, and authored nodes", () => {
+  test("includes poison/ignite hazard mini-batch rings with exact effects", () => {
+    expect(getRingDefById("RING_POISON_POISON_TRAIL")).toMatchObject({
+      name: "Poison Trail",
+      description: "Leave a poison trail behind you that poisons enemies.",
+      tier: "t2",
+      familyId: "poison",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "POISON_TRAIL", radius: 30, poisonDps: 5, tickEvery: 0.5, trailTtl: 3, dropEvery: 0.3 }],
+      },
+    });
+    expect(getRingDefById("RING_IGNITE_LASER_EXECUTOR")).toMatchObject({
+      name: "Laser Executor",
+      description: "Periodically execute nearby enemies below 15% life.",
+      tier: "t1",
+      familyId: "ignite",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "LASER_EXECUTOR", thresholdFraction: 0.15, rangePx: 200, scanEvery: 1.5 }],
+      },
+    });
+    expect(getRingDefById("RING_POISON_PLAGUE_DETONATION")).toMatchObject({
+      name: "Plague Detonation",
+      description: "Poisoned enemies explode on death for 50% of their max life as chaos damage.",
+      tier: "t0",
+      familyId: "poison",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "POISONED_ENEMIES_EXPLODE_ON_DEATH", radius: 100, damageScalar: 0.5, damageType: "CHAOS" }],
+      },
+    });
+    expect(getRingDefById("RING_IGNITE_SMOLDERING_DRAG")).toMatchObject({
+      name: "Smoldering Drag",
+      description: "Ignited enemies are slowed by 10%.",
+      tier: "t3",
+      familyId: "ignite",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "BURNING_ENEMIES_MOVE_SPEED_REDUCED", reduced: 0.1 }],
+      },
+    });
+    expect(getRingDefById("RING_POISON_WEAKENING_VENOM")).toMatchObject({
+      name: "Weakening Venom",
+      description: "Poisoned enemies deal 20% less damage.",
+      tier: "t2",
+      familyId: "poison",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "POISONED_ENEMIES_DAMAGE_REDUCED", reduced: 0.2 }],
+      },
+    });
+  });
+
+  test("includes physical control/empower mini-batch rings with exact effects", () => {
+    expect(getRingDefById("RING_PHYSICAL_RETALIATION_BURST")).toMatchObject({
+      name: "Retaliation Burst",
+      description: "Taking damage has a 30% chance to trigger an explosion, stunning nearby enemies for 1 second.",
+      tier: "t2",
+      familyId: "physical",
+      mainEffect: {
+        kind: "TRIGGERED",
+        triggerKey: "ON_PLAYER_HIT",
+        procChance: 0.3,
+        action: { kind: "STUN_EXPLOSION", radius: 120, stunDurationSec: 1 },
+      },
+    });
+    expect(getRingDefById("RING_PHYSICAL_STAGGERING_BLOWS")).toMatchObject({
+      name: "Staggering Blows",
+      description: "Physical hits have a 5% chance to stun enemies for 0.5 seconds.",
+      tier: "t3",
+      familyId: "physical",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "PHYSICAL_HIT_STUN_CHANCE", chance: 0.05, stunDurationSec: 0.5 }],
+      },
+    });
+    expect(getRingDefById("RING_PHYSICAL_HEAVY_CHAMBER")).toMatchObject({
+      name: "Heavy Chamber",
+      description: "Every 4 seconds, empower your next shot to deal 50% increased physical damage.",
+      tier: "t2",
+      familyId: "physical",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "TIMED_NEXT_SHOT_EMPOWER", chargeEvery: 4, physicalDamageIncreased: 0.5 }],
+      },
+    });
+    expect(getRingDefById("RING_GENERIC_KILL_MOMENTUM")).toMatchObject({
+      name: "Kill Momentum",
+      description: "Killing an enemy empowers your next shot to deal 20% increased damage.",
+      tier: "t2",
+      familyId: "generic",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "KILL_EMPOWER_NEXT_SHOT", damageIncreased: 0.2 }],
+      },
+    });
+    expect(getRingDefById("RING_CRIT_CRITICAL_SPRINT")).toMatchObject({
+      name: "Critical Sprint",
+      description: "Critically striking grants 20% movement speed for 1 second.",
+      tier: "t0",
+      familyId: "crit",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "CRIT_MOVE_SPEED_BUFF", moveSpeedIncreased: 0.2, durationSec: 1 }],
+      },
+    });
+  });
+
+  test("includes phase 5-6 rings: Mirror Band, Amplifying Band, Living Bomb", () => {
+    expect(getRingDefById("RING_UTILITY_MIRROR_BAND")).toMatchObject({
+      name: "Mirror Band",
+      description: "Mirrors the effect of the ring to the left of this ring.",
+      tier: "t0",
+      familyId: "utility",
+      mainEffect: { kind: "MIRROR_LEFT_RING" },
+    });
+    expect(getRingDefById("RING_UTILITY_AMPLIFYING_BAND")).toMatchObject({
+      name: "Amplifying Band",
+      description: "Increases the effect of surrounding rings by 50%.",
+      tier: "t0",
+      familyId: "utility",
+      mainEffect: { kind: "AMPLIFY_NEIGHBORS", increasedEffectBonus: 0.5 },
+    });
+    expect(getRingDefById("RING_IGNITE_LIVING_BOMB")).toMatchObject({
+      name: "Living Bomb",
+      tier: "t0",
+      familyId: "ignite",
+      mainEffect: {
+        kind: "COMBAT_RULES",
+        rules: [{ kind: "LIVING_BOMB", markEvery: 20, speedIncreased: 0.5, explosionDamageScalar: 3.0, explosionRadius: 150 }],
+      },
+    });
+  });
+
+  test("rejects missing descriptions, bad tiers, and missing family trees", () => {
     const issues = validateRingContent(
       [
         ...RING_DEFS_V1,
@@ -444,7 +660,6 @@ describe("ring content validation", () => {
     expect(issues.some((issue) => issue.message.includes("Ring description"))).toBe(true);
     expect(issues.some((issue) => issue.message.includes("Ring tier must be one of"))).toBe(true);
     expect(issues.some((issue) => issue.message.includes("Missing family talent tree"))).toBe(true);
-    expect(issues.some((issue) => issue.message.includes("must not author talent nodes"))).toBe(true);
   });
 
   test("rejects invalid triggered and combat-rule effect defs", () => {
@@ -466,7 +681,25 @@ describe("ring content validation", () => {
           id: "RING_INVALID_RULE",
           mainEffect: {
             kind: "COMBAT_RULES",
-            rules: [{ kind: "POISON_EXTRA_STACK_CHANCE", chance: 2 }],
+            rules: [
+              { kind: "POISON_EXTRA_STACK_CHANCE", chance: 2 },
+              { kind: "PROJECTILE_HIT_DAMAGE_INCREASED_PER_PIERCED_ENEMY", increasedPerEnemy: -1 },
+            ],
+          },
+        },
+        {
+          ...RING_DEFS_V1[0],
+          id: "RING_INVALID_CHAIN_HIT",
+          mainEffect: {
+            kind: "TRIGGERED",
+            triggerKey: "ON_HIT",
+            action: {
+              kind: "CHAIN_HIT",
+              maxTargets: 0,
+              jumpRangePx: -1,
+              damageScalar: -1,
+              damageType: "MATCH_HIT",
+            },
           },
         },
       ] as any,
@@ -477,6 +710,10 @@ describe("ring content validation", () => {
     expect(issues.some((issue) => issue.message.includes("procChance"))).toBe(true);
     expect(issues.some((issue) => issue.message.includes("Unsupported triggered action"))).toBe(true);
     expect(issues.some((issue) => issue.message.includes("chance must be"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("increasedPerEnemy"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("Chain maxTargets"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("Chain jumpRangePx"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("Chain damageScalar"))).toBe(true);
   });
 
   test("rejects invalid dynamic stat and floor lifecycle effect defs", () => {
@@ -545,5 +782,24 @@ describe("ring content validation", () => {
     expect(issues.some((issue) => issue.message.includes("multiplier must be"))).toBe(true);
     expect(issues.some((issue) => issue.message.includes("count must be"))).toBe(true);
     expect(issues.some((issue) => issue.message.includes("Unsupported reward rule"))).toBe(true);
+  });
+
+  test("rejects invalid weapon fire rule effect defs", () => {
+    const issues = validateRingContent(
+      [
+        ...RING_DEFS_V1,
+        {
+          ...RING_DEFS_V1[0],
+          id: "RING_INVALID_WEAPON_FIRE_RULES",
+          mainEffect: {
+            kind: "WEAPON_FIRE_RULES",
+            rules: [{ kind: "NOT_REAL" }],
+          },
+        },
+      ] as any,
+      RING_FAMILY_TALENT_TREES_V1,
+    );
+
+    expect(issues.some((issue) => issue.message.includes("Unsupported weapon fire rule"))).toBe(true);
   });
 });

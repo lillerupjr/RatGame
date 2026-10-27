@@ -28,9 +28,11 @@ import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import {
   applyNonPhysicalHitDamageSuppression,
   applyPhysicalHitDamageIncreased,
+  applyProjectilePiercedEnemyDamageIncreased,
   collectWorldCombatRules,
 } from "../../progression/effects/combatRules";
 import { applyPlayerIncomingDamage } from "./playerArmor";
+import { stunEnemy } from "../enemies/brain";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 import { breakMomentumOnLifeDamage } from "./momentum";
 import {
@@ -434,6 +436,21 @@ export function collisionsSystem(w: World, dt: number) {
         }
       }
 
+      if (
+        projectileIsPlayerOwned
+        && !projectileIsProc
+        && combatRules.projectileHitDamageIncreasedPerPiercedEnemy > 0
+      ) {
+        const scaled = applyProjectilePiercedEnemyDamageIncreased(
+          { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
+          combatRules,
+          w.prPiercedEnemyCount[p] ?? 0,
+        );
+        finalPhysDealt = scaled.physical;
+        finalFireDealt = scaled.fire;
+        finalChaosDealt = scaled.chaos;
+      }
+
       if (projectileIsPlayerOwned && !projectileIsProc) {
         const scaled = applyPhysicalHitDamageIncreased(
           { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
@@ -526,6 +543,16 @@ export function collisionsSystem(w: World, dt: number) {
         damageMeta: projectileDamageMeta,
       });
 
+      if (
+        combatRules.physicalHitStunChance
+        && projectileIsPlayerOwned
+        && !projectileIsProc
+        && finalPhysDealt > 0
+        && w.rng.range(0, 1) < combatRules.physicalHitStunChance.chance
+      ) {
+        stunEnemy(w, e, combatRules.physicalHitStunChance.stunDurationSec);
+      }
+
       let shouldDespawnProjectile = false;
 
       // Bounce / pierce handling
@@ -578,6 +605,7 @@ export function collisionsSystem(w: World, dt: number) {
         // Normal pierce behavior for non-bouncing projectiles
         if (w.prPierce[p] > 0) {
           w.prPierce[p] -= 1;
+          w.prPiercedEnemyCount[p] = Math.max(0, Math.floor(w.prPiercedEnemyCount[p] ?? 0)) + 1;
         } else if (contaminatedPierceHit) {
           // Starter Contaminated Rounds: poisoned targets are always pierced.
         } else {
@@ -776,7 +804,7 @@ export function collisionsSystem(w: World, dt: number) {
       const rr = w.eR[e] + PLAYER_R;
 
       if (!isPlayerHit(w, e, PLAYER_R)) continue;
-      const contactDamage = Math.max(
+      let contactDamage = Math.max(
         0,
         Number.isFinite(w.eDamage[e])
           ? (w.eDamage[e] as number)
@@ -784,6 +812,12 @@ export function collisionsSystem(w: World, dt: number) {
             ?? registry.enemy(w.eType[e] as any).stats.contactDamage,
       );
       if (!(contactDamage > 0)) continue;
+      if (combatRules.poisonedEnemiesDamageReduced > 0) {
+        const ailments = w.eAilments?.[e];
+        if (ailments && ailments.poison.length > 0) {
+          contactDamage *= (1 - combatRules.poisonedEnemiesDamageReduced);
+        }
+      }
 
       // CONTACT HIT
       const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, contactDamage);

@@ -232,6 +232,107 @@ describe("ring combat rules", () => {
     expect(hitEvent.dmgPhys).toBeCloseTo(14);
   });
 
+  test("Piercing Momentum increases damage after consumed pierce hits", () => {
+    const world = createWorld({ seed: 2057, stage: stageDocks });
+    equipRing(world, "RING_PROJECTILE_PIERCING_MOMENTUM", "LEFT:0");
+    const first = spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    rebuildEnemyHash(world);
+    spawnPlayerProjectileAtEnemy(world, first, { damage: 10, dmgPhys: 10, pierce: 2 });
+
+    collisionsSystem(world, 1 / 60);
+
+    const hitEvents = world.events.filter((event) => event.type === "ENEMY_HIT") as any[];
+    expect(hitEvents).toHaveLength(3);
+    expect(hitEvents[0].damage).toBeCloseTo(10);
+    expect(hitEvents[1].damage).toBeCloseTo(13);
+    expect(hitEvents[2].damage).toBeCloseTo(16);
+  });
+
+  test("Piercing Momentum does not count bounce hits or poison/free pierce", () => {
+    const bounceWorld = createWorld({ seed: 2058, stage: stageDocks });
+    equipRing(bounceWorld, "RING_PROJECTILE_PIERCING_MOMENTUM", "LEFT:0");
+    const bounceEnemy = spawnEnemyGrid(bounceWorld, EnemyId.MINION, 9, 9);
+    rebuildEnemyHash(bounceWorld);
+    const bouncingProjectile = spawnPlayerProjectileAtEnemy(bounceWorld, bounceEnemy, {
+      damage: 10,
+      dmgPhys: 10,
+      pierce: 2,
+      bounces: 1,
+    });
+
+    collisionsSystem(bounceWorld, 1 / 60);
+
+    const bounceHit = bounceWorld.events.find((event) => event.type === "ENEMY_HIT") as any;
+    expect(bounceHit.damage).toBeCloseTo(10);
+    expect(bounceWorld.prPiercedEnemyCount[bouncingProjectile]).toBe(0);
+
+    const poisonWorld = createWorld({ seed: 2059, stage: stageDocks });
+    equipRing(poisonWorld, "RING_PROJECTILE_PIERCING_MOMENTUM", "LEFT:0");
+    equipRing(poisonWorld, "RING_STARTER_CONTAMINATED_ROUNDS", "LEFT:1");
+    const poisonedEnemy = spawnEnemyGrid(poisonWorld, EnemyId.MINION, 9, 9);
+    rebuildEnemyHash(poisonWorld);
+    poisonWorld.eAilments = [];
+    poisonWorld.eAilments[poisonedEnemy] = createEnemyAilmentsState();
+    addPoison(poisonWorld.eAilments[poisonedEnemy]!, 20);
+    const poisonProjectile = spawnPlayerProjectileAtEnemy(poisonWorld, poisonedEnemy, {
+      damage: 10,
+      dmgPhys: 10,
+      pierce: 0,
+    });
+
+    collisionsSystem(poisonWorld, 1 / 60);
+
+    expect(poisonWorld.pAlive[poisonProjectile]).toBe(true);
+    expect(poisonWorld.prPiercedEnemyCount[poisonProjectile]).toBe(0);
+  });
+
+  test("Backfire Shot spawns one rear projectile opposite the firing direction", () => {
+    const world = createWorld({ seed: 2060, stage: stageDocks });
+    (world as any).currentCharacterId = "JACK";
+    equipRing(world, "RING_PROJECTILE_BACKFIRE_SHOT", "LEFT:0");
+    spawnEnemyGrid(world, EnemyId.MINION, 1, 0);
+    rebuildEnemyHash(world);
+    (world.rng as any).range = (min: number, max: number) => (min + max) * 0.5;
+    world.primaryWeaponCdLeft = 0;
+
+    combatSystem(world, 1 / 60);
+
+    expect(world.pAlive.filter(Boolean)).toHaveLength(2);
+    const dot = world.prDirX[0] * world.prDirX[1] + world.prDirY[0] * world.prDirY[1];
+    expect(dot).toBeLessThan(-0.99);
+    expect(world.prDamageMeta[1]?.instigator?.actor).toBe("PLAYER");
+    expect(world.prDamageMeta[1]?.isProcDamage).toBe(false);
+  });
+
+  test("Backfire Shot is not multiplied by projectile count and does not affect beams", () => {
+    const multiWorld = createWorld({ seed: 2061, stage: stageDocks });
+    (multiWorld as any).currentCharacterId = "JACK";
+    equipRing(multiWorld, "RING_PROJECTILE_BACKFIRE_SHOT", "LEFT:0");
+    equipRing(multiWorld, "RING_PROJECTILE_ADDITIONAL_PROJECTILES_1", "LEFT:1");
+    spawnEnemyGrid(multiWorld, EnemyId.MINION, 1, 0);
+    rebuildEnemyHash(multiWorld);
+    (multiWorld.rng as any).range = (min: number, max: number) => (min + max) * 0.5;
+    multiWorld.primaryWeaponCdLeft = 0;
+
+    combatSystem(multiWorld, 1 / 60);
+
+    expect(multiWorld.pAlive.filter(Boolean)).toHaveLength(3);
+
+    const beamWorld = createWorld({ seed: 2062, stage: stageDocks });
+    (beamWorld as any).currentCharacterId = "JOEY";
+    equipRing(beamWorld, "RING_PROJECTILE_BACKFIRE_SHOT", "LEFT:0");
+    spawnEnemyGrid(beamWorld, EnemyId.MINION, 1, 0);
+    rebuildEnemyHash(beamWorld);
+    beamWorld.primaryWeaponCdLeft = 0;
+
+    combatSystem(beamWorld, 1 / 60);
+
+    expect(beamWorld.pAlive.filter(Boolean)).toHaveLength(0);
+    expect(beamWorld.playerBeamActive).toBe(true);
+  });
+
   test("Thermal Starter increases hit damage against burning enemies", () => {
     const world = createWorld({ seed: 2051, stage: stageDocks });
     equipRing(world, "RING_STARTER_THERMAL_STARTER", "LEFT:0");

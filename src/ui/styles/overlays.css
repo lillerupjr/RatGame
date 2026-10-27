@@ -2937,6 +2937,10 @@ html.ios-standalone-fix #ui {
   backdrop-filter: blur(3px);
 }
 
+.boonOverlay {
+  z-index: 12;
+}
+
 .deckOverlay .panel {
   width: min(980px, 100%);
   max-width: 100%;
@@ -3148,6 +3152,13 @@ html.ios-standalone-fix #ui {
   line-height: 1.35;
   display: grid;
   gap: 3px;
+}
+
+.deckCardDebug {
+  margin-top: 6px;
+  font: 400 8px var(--font-mono);
+  color: rgba(180, 180, 180, 0.6);
+  word-break: break-all;
 }
 
 .deckCardButton.rarity-1 { border-left: 4px solid rgba(198, 207, 224, 0.75); }

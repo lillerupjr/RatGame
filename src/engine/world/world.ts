@@ -474,6 +474,7 @@ export type World = {
   prChancePoison: number[];
   prR: number[];
   prPierce: number[];
+  prPiercedEnemyCount: number[];
   prIsmelee: boolean[];
   prCone: number[];
   prMeleeRange: number[];
@@ -895,6 +896,7 @@ export function createWorld(args: CreateWorldArgs): World {
     prChancePoison: [],
     prR: [],
     prPierce: [],
+    prPiercedEnemyCount: [],
     prIsmelee: [],
     prCone: [],
     prMeleeRange: [],

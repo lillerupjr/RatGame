@@ -18,6 +18,7 @@ export const ZONE_KIND = {
     // NEW: boss telegraph + hazards
     TELEGRAPH: 4, // warning only
     HAZARD: 5,    // damages player (optional) and/or enemies
+    POISON: 6,    // poison trail zones — apply poison stacks instead of direct damage
 } as const;
 
 export type SpawnZoneArgs = {

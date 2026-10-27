@@ -32,6 +32,8 @@ import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeM
 import type { EnemyId } from "../../content/enemies";
 import { registry } from "../../content/registry";
 import { ensureEnemyBrain } from "../enemies/brain";
+import { collectWorldCombatRules } from "../../progression/effects/combatRules";
+import { isLivingBombMarked } from "./livingBomb";
 
 type GridPos = { gx: number; gy: number };
 type WorldPos = { wx: number; wy: number };
@@ -85,6 +87,7 @@ export function resolvePlayerMoveIntent(input: InputState): { gdx: number; gdy: 
 
 /** Update player/enemy movement, steering, and facing. */
 export function movementSystem(w: World, input: InputState, dt: number) {
+  const combatRules = collectWorldCombatRules(w);
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
@@ -294,6 +297,19 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       let dirWy = eWorldDir.wy;
       let applyMovement = Math.hypot(dirWx, dirWy) > 1e-6;
       let chaseSpeed = w.eSpeed[i] * speedMult;
+
+      if (brain && brain.stunLeftSec > 0) {
+        applyMovement = false;
+      }
+      if (combatRules.burningEnemiesMoveSpeedReduced > 0) {
+        const ailments = w.eAilments?.[i];
+        if (ailments && ailments.ignite.length > 0) {
+          chaseSpeed *= (1 - combatRules.burningEnemiesMoveSpeedReduced);
+        }
+      }
+      if (combatRules.livingBomb && isLivingBombMarked(w, i)) {
+        chaseSpeed *= (1 + combatRules.livingBomb.speedIncreased);
+      }
       let moveScale = 1;
 
       if (shouldUseSharedRange && brain) {

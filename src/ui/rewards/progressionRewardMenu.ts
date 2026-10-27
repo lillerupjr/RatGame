@@ -1,7 +1,7 @@
 import {
   type ProgressionRewardState,
 } from "../../game/progression/rewards/progressionRewardFlow";
-import { progressionRewardOptionView } from "../../game/progression/rewards/progressionOffers";
+import { progressionRewardOptionView, type RingRewardOption } from "../../game/progression/rewards/progressionOffers";
 import { rewardFamilyLabel } from "../../game/progression/rewards/rewardFamilies";
 import { createTapSafeActivator } from "../interaction/tapSafeActivate";
 
@@ -118,6 +118,22 @@ export function mountProgressionRewardMenu(args: {
       btn.appendChild(top);
       btn.appendChild(name);
       btn.appendChild(subtitle);
+      if (view.description) {
+        const desc = document.createElement("div");
+        desc.className = "deckCardDesc";
+        desc.textContent = view.description;
+        btn.appendChild(desc);
+      }
+      if (import.meta.env.DEV) {
+        const debug = document.createElement("div");
+        debug.className = "deckCardDebug";
+        if (view.rolledTier || view.authoredTier) {
+          debug.textContent = `rolled:${view.rolledTier ?? "–"} authored:${view.authoredTier ?? "–"} ${option.family === "RING" ? (option as RingRewardOption).ringDefId : ""}`;
+        } else {
+          debug.textContent = option.id;
+        }
+        btn.appendChild(debug);
+      }
       tapSafe.bindActivate(btn, () => args.onPick(option.id));
       choices.appendChild(btn);
     }

@@ -188,6 +188,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prChancePoison.push(Number.isFinite(a.chancePoison as any) ? (a.chancePoison as number) : 0);
     w.prR.push(a.radius);
     w.prPierce.push(a.pierce);
+    w.prPiercedEnemyCount.push(0);
 
     // Bounce counter (index-aligned with all other projectile arrays)
     w.prBouncesLeft.push(Number.isFinite(a.bounces as any) ? (a.bounces as number) : -1);

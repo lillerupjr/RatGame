@@ -43,6 +43,12 @@ import {
   monolithicStructureGeometryCacheStore,
 } from "./systems/presentation/presentationSubsystemStores";
 import { zonesSystem } from "./systems/sim/zones";
+import { tickPoisonTrail } from "./systems/sim/poisonTrail";
+import { tickLaserExecutor } from "./systems/sim/laserExecutor";
+import { tickNextShotEmpower } from "./systems/sim/empowerSystem";
+import { tickCritMoveSpeedBuff } from "./systems/sim/critMoveSpeedBuff";
+import { tickLivingBomb } from "./systems/sim/livingBomb";
+import { collectWorldCombatRules } from "./progression/effects/combatRules";
 import { buildActBossPlan } from "./bosses/actBossPlan";
 import { bossRegistry } from "./bosses/bossRegistry";
 import { bossEncounterSystem } from "./bosses/bossSystem";
@@ -178,7 +184,9 @@ import {
   ensureProgressionRewardState,
   rerollProgressionReward,
 } from "./progression/rewards/progressionRewardFlow";
-import { equipRing, unequipRing, applyModifierTokenToRing } from "./progression/rings/ringState";
+import { equipRing, unequipRing, applyModifierTokenToRing, applyBoonToRing } from "./progression/rings/ringState";
+import { generateBoonOptions, type BoonSelectionContext } from "./progression/rings/ringBoonSelection";
+import { getRingDefById } from "./progression/rings/ringContent";
 import type { ModifierTokenType } from "./progression/rings/ringTypes";
 import { equipStarterRingForCharacter } from "./progression/rings/characterStarterRingMap";
 import { getGold } from "./economy/gold";
@@ -1810,6 +1818,7 @@ export function createGame(args: CreateGameArgs) {
     w.prChancePoison = [];
     w.prR = [];
     w.prPierce = [];
+    w.prPiercedEnemyCount = [];
     w.prIsmelee = [];
     // NEW: bounce mechanic arrays must be cleared too (keep index alignment!)
     // @ts-ignore
@@ -3298,6 +3307,23 @@ export function createGame(args: CreateGameArgs) {
     recomputeDerivedStats(world);
   }
 
+  function handsScreenRequestBoonOptions(instanceId: string): BoonSelectionContext {
+    const state = world.progression;
+    if (!state) return null;
+    const instance = state.ringsByInstanceId[instanceId];
+    if (!instance) return null;
+    const def = getRingDefById(instance.defId);
+    if (!def) return null;
+    const options = generateBoonOptions(world, def.familyId, instance.unlockedTalentNodeIds, 3);
+    if (options.length === 0) return null;
+    return { ringName: def.name, familyId: def.familyId, options };
+  }
+
+  function handsScreenApplyBoon(instanceId: string, nodeId: string): void {
+    applyBoonToRing(world, instanceId, nodeId);
+    recomputeDerivedStats(world);
+  }
+
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
     const vm = buildDeterministicRouteMapVM(DETERMINISTIC_CHOICES, floorIndex, depth);
     renderRouteMap(vm, subText);
@@ -3724,6 +3750,14 @@ export function createGame(args: CreateGameArgs) {
     collisionsSystem(world, dtSim);
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
     bossEncounterSystem(world, dtSim);
+    {
+      const simCombatRules = collectWorldCombatRules(world);
+      tickPoisonTrail(world, dtSim, simCombatRules);
+      tickLaserExecutor(world, dtSim, simCombatRules);
+      tickNextShotEmpower(world, dtSim, simCombatRules);
+      tickCritMoveSpeedBuff(world, dtSim, simCombatRules);
+      tickLivingBomb(world, dtSim, simCombatRules);
+    }
     zonesSystem(world, dtSim);
     dotTickSystem(world, dtSim);
     pickupsSystem(world, dtSim);
@@ -3925,6 +3959,8 @@ export function createGame(args: CreateGameArgs) {
     handsScreenEquipToSlot,
     handsScreenUnequipSlot,
     handsScreenApplyToken,
+    handsScreenRequestBoonOptions,
+    handsScreenApplyBoon,
     isHandsScreenOpen: () => handsScreenOpen,
     getHandsScreenPendingRingDefId: () => handsScreenChooseSlotPending?.ringDefId ?? null,
   };

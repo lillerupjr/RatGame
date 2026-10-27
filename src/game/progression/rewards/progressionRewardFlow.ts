@@ -73,6 +73,14 @@ export function beginProgressionReward(
   state.rerollsRemaining = resolveRerollCount(world, family, source);
   state.renderSeq += 1;
   state.options = generateProgressionRewardOffers(world, family, source, state.baseOptionCount);
+  if (import.meta.env.DEV && (world as any)?.debug?.rewardPipelineLogs) {
+    console.debug("[progressionReward]", {
+      family,
+      source,
+      optionCount,
+      options: state.options.map((o) => o.id),
+    });
+  }
 }
 
 export function applyProgressionRewardOption(world: any, option: ProgressionRewardOption): void {

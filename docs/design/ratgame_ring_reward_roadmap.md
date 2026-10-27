@@ -61,7 +61,7 @@ The ring pool should be large enough that runs feel different and that tier weig
 
 The first implementation pass should not aim for perfect balance. It is more important to get all rings represented, selectable, testable, and compatible with the reward system.
 
-Current source pool: 49 shipped authored rings, including 44 normal reward-eligible rings and 5 starter-only rings. The active non-block target is 65 authored rings before the deferred block reserve.
+Current source pool: 65 shipped authored rings, including 60 normal reward-eligible rings and 5 starter-only rings. The active non-block target of 65 authored rings before the deferred block reserve has been reached.
 
 ### Implementation implications
 
@@ -89,8 +89,13 @@ This should happen before adding many new rings, to avoid rewriting the pool lat
 - [x] Ship conditional combat-rule batch: Close Quarters Guard, Pure Force, Physical Devotion.
 - [x] Ship health/floor lifecycle batch: Floor Recovery, Vital Force, Wounded Fury.
 - [x] Ship reward manipulation batch: Wider Selection, Curated Rewards, Selective Hand.
-- [ ] Add missing new rings.
-- [ ] Verify all rings appear correctly in reward selection and UI.
+- [x] Ship projectile/trigger mechanics batch: Piercing Momentum, Backfire Shot, Lightning Chain.
+- [x] Ship poison/ignite hazard batch: Poison Trail, Laser Executor, Plague Detonation, Smoldering Drag, Weakening Venom.
+- [x] Ship physical control/empower batch: Retaliation Burst, Staggering Blows, Heavy Chamber, Kill Momentum, Critical Sprint.
+- [x] Ship slot position chase batch: Mirror Band, Amplifying Band.
+- [x] Ship living bomb setpiece batch: Living Bomb.
+- [x] Add missing new rings (65 authored, non-block target reached).
+- [x] Verify all rings appear correctly in reward selection and UI.
 
 ---
 
@@ -179,10 +184,10 @@ This should be implemented before the full event system, because reward visibili
 
 ### Status
 
-- [ ] Add reward type metadata to map nodes.
-- [ ] Display reward type on the map.
-- [ ] Connect ring reward nodes to actual ring reward flow.
-- [ ] Connect token reward nodes to token reward flow.
+- [x] Add reward type metadata to map nodes.
+- [x] Display reward type on the map.
+- [x] Connect ring reward nodes to actual ring reward flow.
+- [x] Connect token reward nodes to token reward flow.
 - [ ] Add placeholder display for future node types.
 
 ---
@@ -212,11 +217,11 @@ This is the most important reward type to get working first, because it validate
 
 ### Status
 
-- [ ] Create ring reward node completion flow.
+- [x] Create ring reward node completion flow.
 - [x] Generate 3 weighted ring choices.
-- [ ] Respect ring slot/equipment rules.
-- [ ] Prevent duplicate or unwanted reward behavior if needed.
-- [ ] Add debug tools for reward generation.
+- [x] Respect ring slot/equipment rules.
+- [x] Prevent duplicate or unwanted reward behavior if needed.
+- [x] Add debug tools for reward generation.
 
 ---
 
@@ -266,12 +271,12 @@ Hand/finger tokens should come later, because they affect more systems and are l
 
 ### Status
 
-- [ ] Define token data model.
-- [ ] Add token reward node completion flow.
-- [ ] Add UI for selecting a target ring.
-- [ ] Implement basic ring level-up token.
-- [ ] Implement basic +20% enchant token.
-- [ ] Defer advanced hand/finger tokens until ring tokens work.
+- [x] Define token data model.
+- [x] Add token reward node completion flow.
+- [x] Add UI for selecting a target ring.
+- [x] Implement basic ring level-up token.
+- [x] Implement basic +20% enchant token.
+- [x] Defer advanced hand/finger tokens until ring tokens work.
 
 ---
 
@@ -335,11 +340,11 @@ It also makes ring families matter without requiring a large custom UI for every
 
 ### Status
 
-- [ ] Do not implement full per-ring talent trees for V1.
-- [ ] Define ring family boon pools.
-- [ ] Implement choice-of-3 boon selection.
-- [ ] Attach selected boon to the chosen ring.
-- [ ] Display ring boons clearly in ring UI.
+- [x] Do not implement full per-ring talent trees for V1.
+- [x] Define ring family boon pools.
+- [x] Implement choice-of-3 boon selection.
+- [x] Attach selected boon to the chosen ring.
+- [x] Display ring boons clearly in ring UI.
 
 ---
 
@@ -398,10 +403,10 @@ Each family pool can grow over time.
 
 ### Status
 
-- [ ] Define initial family list.
-- [ ] Define 3-6 boons per major family.
-- [ ] Add boon application logic.
-- [ ] Add boon display text.
+- [x] Define initial family list.
+- [x] Define 3-6 boons per major family.
+- [x] Add boon application logic.
+- [x] Add boon display text.
 - [ ] Add balance/debug tools.
 
 ---
@@ -521,10 +526,10 @@ The fantasy is strong: the player is not just collecting rings, they are mutatin
 
 ### Status
 
-- [ ] Defer until ring-level token system works.
-- [ ] Define hand/finger data model if missing.
-- [ ] Define target selection UI.
-- [ ] Implement one simple positive hand token.
+- [x] Defer until ring-level token system works.
+- [x] Define hand/finger data model if missing.
+- [x] Define target selection UI.
+- [x] Implement one simple positive hand token (ADD_FINGER, EMPOWER_FINGER).
 - [ ] Implement one sacrifice/risk token.
 - [ ] Evaluate whether this system is too complex for V1.
 
@@ -594,26 +599,26 @@ However, ring tier and family metadata should be added early so the asset system
 
 ### Phase 1 — Ring foundation
 
-- [ ] Clean up ring data model.
-- [ ] Support tier/family/tags/effect/asset/upgrade metadata.
-- [ ] Add full ~70 ring pool.
-- [ ] Keep original 29 rings in the final pool.
-- [ ] Add tier weights.
+- [x] Clean up ring data model.
+- [x] Support tier/family/tags/effect/asset/upgrade metadata.
+- [x] Add full ~70 ring pool (65 authored; 9 block-dependent rings deferred by design).
+- [x] Keep original 29 rings in the final pool.
+- [x] Add tier weights.
 
 ### Phase 2 — Reward loop
 
-- [ ] Add map reward type visibility.
-- [ ] Add ring reward nodes.
-- [ ] Add token reward nodes.
-- [ ] Add reward debug tools.
+- [x] Add map reward type visibility.
+- [x] Add ring reward nodes.
+- [x] Add token reward nodes.
+- [x] Add reward debug tools.
 
 ### Phase 3 — Ring progression
 
-- [ ] Add ring level-up token.
-- [ ] Add +20% enchant token.
-- [ ] Add family boon pools.
-- [ ] Add choice-of-3 boon UI.
-- [ ] Show boons on rings.
+- [x] Add ring level-up token.
+- [x] Add +20% enchant token.
+- [x] Add family boon pools.
+- [x] Add choice-of-3 boon UI.
+- [x] Show boons on rings.
 
 ### Phase 4 — Events
 
@@ -624,8 +629,8 @@ However, ring tier and family metadata should be added early so the asset system
 
 ### Phase 5 — Hand/finger expansion
 
-- [ ] Add hand/finger target model.
-- [ ] Add simple hand/finger token.
+- [x] Add hand/finger target model.
+- [x] Add simple hand/finger token (ADD_FINGER, EMPOWER_FINGER).
 - [ ] Add sacrifice-style token.
 - [ ] Evaluate complexity and player clarity.
 

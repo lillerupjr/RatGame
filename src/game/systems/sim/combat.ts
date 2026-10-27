@@ -5,7 +5,7 @@
 
 import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
-import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
+import { PRJ_KIND, spawnProjectile, type SpawnProjectileArgs } from "../../factories/projectileFactory";
 import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
 import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
@@ -18,6 +18,8 @@ import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { makeWeaponDotMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
 import { applyChaosHitConversion, collectWorldCombatRules } from "../../progression/effects/combatRules";
+import { collectWorldWeaponFireRules } from "../../progression/effects/weaponFireRules";
+import { consumeNextShotEmpower } from "./empowerSystem";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -45,6 +47,7 @@ export function combatSystem(w: World, dt: number) {
   });
   const debug = getUserSettings().debug;
   const combatRules = collectWorldCombatRules(w);
+  const weaponFireRules = collectWorldWeaponFireRules(w);
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
   const derivedDamageMult = Math.max(0, w.dmgMult ?? 1);
@@ -94,20 +97,34 @@ export function combatSystem(w: World, dt: number) {
     return finalCritChance;
   };
 
-  const spawnResolvedProjectile = (dirX: number, dirY: number): void => {
+  const makeResolvedProjectileArgs = (
+    dirX: number,
+    dirY: number,
+    shotCritChance: number,
+    empower: { physIncreased: number; allIncreased: number } = { physIncreased: 0, allIncreased: 0 },
+  ): SpawnProjectileArgs => {
+    let finalPhys = dmgPhys;
+    let finalFire = dmgFire;
+    let finalChaos = dmgChaos;
+    if (empower.physIncreased > 0) finalPhys *= (1 + empower.physIncreased);
+    if (empower.allIncreased > 0) {
+      const allMult = 1 + empower.allIncreased;
+      finalPhys *= allMult;
+      finalFire *= allMult;
+      finalChaos *= allMult;
+    }
     const from = getPlayerAimWorld(w);
-    const shotCritChance = nextShotCritChance();
-    spawnProjectile(w, {
+    return {
       kind: projectileKind,
       x: from.x,
       y: from.y,
       dirX,
       dirY,
       speed: resolved.projectileSpeedPxPerSec,
-      damage: totalDamage,
-      dmgPhys,
-      dmgFire,
-      dmgChaos,
+      damage: finalPhys + finalFire + finalChaos,
+      dmgPhys: finalPhys,
+      dmgFire: finalFire,
+      dmgChaos: finalChaos,
       critChance: shotCritChance,
       critMulti: resolved.critMulti,
       chanceBleed: resolved.chanceToBleed,
@@ -119,7 +136,17 @@ export function combatSystem(w: World, dt: number) {
       ttl: 2.2,
       maxDist: fireRangePx > 0 ? fireRangePx : undefined,
       damageMeta: weaponHitDamageMeta,
-    });
+    };
+  };
+
+  const spawnResolvedProjectile = (dirX: number, dirY: number, shotCritChance = nextShotCritChance()): number => {
+    const empower = consumeNextShotEmpower(w);
+    return spawnProjectile(w, makeResolvedProjectileArgs(dirX, dirY, shotCritChance, empower));
+  };
+
+  const spawnBackfireProjectile = (aimX: number, aimY: number, shotCritChance: number): void => {
+    if (!weaponFireRules.backfireProjectile) return;
+    spawnProjectile(w, makeResolvedProjectileArgs(-aimX, -aimY, shotCritChance));
   };
 
   const emitFireSfx = (): void => {
@@ -196,10 +223,15 @@ export function combatSystem(w: World, dt: number) {
 
   while (w.primaryWeaponCdLeft <= 0) {
     if (runtime.primaryBurstRemaining > 0) {
+      const isFirstBurstShot = runtime.primaryBurstIndex === 0;
       const burstAimAngle = Math.atan2(runtime.primaryBurstAimY, runtime.primaryBurstAimX);
       const offset = runtime.primaryBurstOffsets[runtime.primaryBurstIndex] ?? 0;
       const angle = burstAimAngle + offset;
-      spawnResolvedProjectile(Math.cos(angle), Math.sin(angle));
+      const shotCritChance = nextShotCritChance();
+      spawnResolvedProjectile(Math.cos(angle), Math.sin(angle), shotCritChance);
+      if (isFirstBurstShot) {
+        spawnBackfireProjectile(runtime.primaryBurstAimX, runtime.primaryBurstAimY, shotCritChance);
+      }
       emitFireSfx();
 
       runtime.primaryBurstIndex += 1;
@@ -229,13 +261,21 @@ export function combatSystem(w: World, dt: number) {
 
     if (projectileCount === 1) {
       const spread = applySpreadToDirection(defaultAimX, defaultAimY, resolved.spreadBaseDeg, w.rng);
-      spawnResolvedProjectile(spread.dirX, spread.dirY);
+      const shotCritChance = nextShotCritChance();
+      spawnResolvedProjectile(spread.dirX, spread.dirY, shotCritChance);
+      spawnBackfireProjectile(defaultAimX, defaultAimY, shotCritChance);
     } else {
       const aimAngle = Math.atan2(defaultAimY, defaultAimX);
       const offsets = computeProjectileAngles(resolved.multiProjectileSpreadDeg, projectileCount);
+      let firstShotCritChance: number | null = null;
       for (let i = 0; i < offsets.length; i++) {
         const angle = aimAngle + offsets[i];
-        spawnResolvedProjectile(Math.cos(angle), Math.sin(angle));
+        const shotCritChance = nextShotCritChance();
+        if (firstShotCritChance == null) firstShotCritChance = shotCritChance;
+        spawnResolvedProjectile(Math.cos(angle), Math.sin(angle), shotCritChance);
+      }
+      if (firstShotCritChance != null) {
+        spawnBackfireProjectile(defaultAimX, defaultAimY, firstShotCritChance);
       }
     }
     emitFireSfx();

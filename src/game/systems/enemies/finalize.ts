@@ -23,6 +23,11 @@ import {
   resolveEnemySplitStage,
   resolveSplitterStageVisualScale,
 } from "./enemyRuntime";
+import { collectWorldCombatRules } from "../../progression/effects/combatRules";
+import { queryCircle } from "../../util/spatialHash";
+import { isEnemyInCircle } from "../sim/hitDetection";
+import { makePlayerTriggerHitMeta } from "../../combat/damageMeta";
+import { isLivingBombMarked, clearLivingBombMark } from "../sim/livingBomb";
 
 const ENEMY_DEATH_PROJECTILE_RADIUS = 8;
 const DEFAULT_SPLIT_SPREAD_RADIUS = 16;
@@ -260,5 +265,130 @@ export function finalizeEnemyDeath(
     source: options.source,
     damageMeta: options.damageMeta,
   });
+
+  // Poisoned enemies explode on death (combat rule)
+  const combatRules = collectWorldCombatRules(w);
+  if (combatRules.poisonedEnemiesExplodeOnDeath) {
+    const poisonStacks = w.eAilments?.[enemyIndex]?.poison ?? [];
+    if (poisonStacks.length > 0) {
+      const { radius, damageScalar, damageType } = combatRules.poisonedEnemiesExplodeOnDeath;
+      const maxLife = Math.max(0, w.eHpMax?.[enemyIndex] ?? 0);
+      const explosionDamage = maxLife * damageScalar;
+      if (explosionDamage > 0) {
+        const dmgPhys = damageType === "PHYSICAL" ? explosionDamage : 0;
+        const dmgFire = damageType === "FIRE" ? explosionDamage : 0;
+        const dmgChaos = damageType === "CHAOS" ? explosionDamage : 0;
+        const meta = makePlayerTriggerHitMeta("RING_POISON_PLAGUE_DETONATION", {
+          category: "HIT",
+          instigatorId: "player",
+          isProcDamage: true,
+        });
+
+        emitEvent(w, { type: "VFX", id: "EXPLOSION", x: pos.x, y: pos.y, radius });
+        emitEvent(w, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
+
+        const nearby = queryCircle(w.enemySpatialHash, pos.x, pos.y, radius + 50);
+        const seen = new Set<number>();
+        for (let i = 0; i < nearby.length; i++) {
+          const target = nearby[i];
+          if (target === enemyIndex) continue;
+          if (seen.has(target)) continue;
+          seen.add(target);
+          if (!w.eAlive[target]) continue;
+          if (!isEnemyInCircle(w, target, pos.x, pos.y, radius)) continue;
+
+          w.eHp[target] -= explosionDamage;
+          const targetPos = getEnemyWorld(w, target, KENNEY_TILE_WORLD);
+          emitEvent(w, {
+            type: "ENEMY_HIT",
+            enemyIndex: target,
+            damage: explosionDamage,
+            dmgPhys,
+            dmgFire,
+            dmgChaos,
+            x: targetPos.wx,
+            y: targetPos.wy,
+            isCrit: false,
+            damageMeta: meta,
+            source: "OTHER",
+          });
+
+          if (w.eHp[target] <= 0) {
+            finalizeEnemyDeath(w, target, {
+              damageMeta: meta,
+              source: "OTHER",
+              damage: explosionDamage,
+              dmgPhys,
+              dmgFire,
+              dmgChaos,
+              isCrit: false,
+              x: targetPos.wx,
+              y: targetPos.wy,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Living Bomb death explosion (combat rule)
+  if (isLivingBombMarked(w, enemyIndex) && combatRules.livingBomb) {
+    const { explosionRadius, explosionDamageScalar } = combatRules.livingBomb;
+    const maxLife = Math.max(0, w.eHpMax?.[enemyIndex] ?? 0);
+    const explosionDamage = maxLife * explosionDamageScalar;
+    if (explosionDamage > 0) {
+      const meta = makePlayerTriggerHitMeta("RING_IGNITE_LIVING_BOMB", {
+        category: "HIT",
+        instigatorId: "player",
+        isProcDamage: true,
+      });
+
+      emitEvent(w, { type: "VFX", id: "EXPLOSION", x: pos.x, y: pos.y, radius: explosionRadius });
+      emitEvent(w, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.6 });
+
+      const nearby = queryCircle(w.enemySpatialHash, pos.x, pos.y, explosionRadius + 50);
+      const seen = new Set<number>();
+      for (let i = 0; i < nearby.length; i++) {
+        const target = nearby[i];
+        if (target === enemyIndex) continue;
+        if (seen.has(target)) continue;
+        seen.add(target);
+        if (!w.eAlive[target]) continue;
+        if (!isEnemyInCircle(w, target, pos.x, pos.y, explosionRadius)) continue;
+
+        w.eHp[target] -= explosionDamage;
+        const targetPos = getEnemyWorld(w, target, KENNEY_TILE_WORLD);
+        emitEvent(w, {
+          type: "ENEMY_HIT",
+          enemyIndex: target,
+          damage: explosionDamage,
+          dmgPhys: 0,
+          dmgFire: explosionDamage,
+          dmgChaos: 0,
+          x: targetPos.wx,
+          y: targetPos.wy,
+          isCrit: false,
+          damageMeta: meta,
+          source: "OTHER",
+        });
+
+        if (w.eHp[target] <= 0) {
+          finalizeEnemyDeath(w, target, {
+            damageMeta: meta,
+            source: "OTHER",
+            damage: explosionDamage,
+            dmgPhys: 0,
+            dmgFire: explosionDamage,
+            dmgChaos: 0,
+            isCrit: false,
+            x: targetPos.wx,
+            y: targetPos.wy,
+          });
+        }
+      }
+    }
+    clearLivingBombMark(w, enemyIndex);
+  }
+
   return true;
 }

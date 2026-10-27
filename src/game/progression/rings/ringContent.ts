@@ -11,7 +11,9 @@ import type {
   EffectDef,
   ModOp,
   RewardRuleDef,
+  StatMod,
   TriggeredEffectActionDef,
+  WeaponFireRuleDef,
 } from "../effects/effectTypes";
 import {
   HAND_EFFECT_TYPES,
@@ -30,6 +32,7 @@ const VALID_TRIGGER_KEYS = new Set([
   "ON_TICK",
   "ON_DODGE",
   "ON_MOVE",
+  "ON_PLAYER_HIT",
   "OTHER",
 ]);
 const VALID_FLOOR_LIFECYCLE_TRIGGERS = new Set(["FLOOR_COMPLETE"]);
@@ -307,6 +310,18 @@ export const RING_DEFS_V1: RingDef[] = [
     },
   },
   {
+    id: "RING_PROJECTILE_PIERCING_MOMENTUM",
+    name: "Piercing Momentum",
+    description: "Projectiles gain 30% increased damage for each enemy they have pierced.",
+    tier: "t1",
+    familyId: "projectile",
+    tags: ["projectile", "pierce", "damage"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "PROJECTILE_HIT_DAMAGE_INCREASED_PER_PIERCED_ENEMY", increasedPerEnemy: 0.3 }],
+    },
+  },
+  {
     id: "RING_PROJECTILE_DAMAGE_INCREASED_10",
     name: "Sharpened Tip",
     description: "Projectiles deal 10% increased damage.",
@@ -343,6 +358,18 @@ export const RING_DEFS_V1: RingDef[] = [
         { key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 5 },
         { key: STAT_KEYS.PROJECTILE_HIT_DAMAGE_LESS, op: "less", value: 0.75 },
       ],
+    },
+  },
+  {
+    id: "RING_PROJECTILE_BACKFIRE_SHOT",
+    name: "Backfire Shot",
+    description: "Also fire a projectile behind you. This projectile is not modified by projectile count.",
+    tier: "t0",
+    familyId: "projectile",
+    tags: ["projectile", "chase", "backfire"],
+    mainEffect: {
+      kind: "WEAPON_FIRE_RULES",
+      rules: [{ kind: "BACKFIRE_PROJECTILE" }],
     },
   },
   {
@@ -527,6 +554,26 @@ export const RING_DEFS_V1: RingDef[] = [
         radius: 5,
         damageScalar: 3.0,
         damageType: "PHYSICAL",
+      },
+    },
+  },
+  {
+    id: "RING_TRIGGER_LIGHTNING_CHAIN",
+    name: "Lightning Chain",
+    description: "On hit: 25% chance to chain lightning to up to 3 other targets, dealing 100% of hit damage to each.",
+    tier: "t0",
+    familyId: "trigger",
+    tags: ["trigger", "lightning", "chain"],
+    mainEffect: {
+      kind: "TRIGGERED",
+      triggerKey: "ON_HIT",
+      procChance: 0.25,
+      action: {
+        kind: "CHAIN_HIT",
+        maxTargets: 3,
+        jumpRangePx: 220,
+        damageScalar: 1,
+        damageType: "MATCH_HIT",
       },
     },
   },
@@ -740,9 +787,307 @@ export const RING_DEFS_V1: RingDef[] = [
       rules: [{ kind: "RING_REWARD_REROLL_ADD", count: 1 }],
     },
   },
+  {
+    id: "RING_POISON_POISON_TRAIL",
+    name: "Poison Trail",
+    description: "Leave a poison trail behind you that poisons enemies.",
+    tier: "t2",
+    familyId: "poison",
+    tags: ["poison", "hazard", "trail"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "POISON_TRAIL", radius: 30, poisonDps: 5, tickEvery: 0.5, trailTtl: 3, dropEvery: 0.3 }],
+    },
+  },
+  {
+    id: "RING_IGNITE_LASER_EXECUTOR",
+    name: "Laser Executor",
+    description: "Periodically execute nearby enemies below 15% life.",
+    tier: "t1",
+    familyId: "ignite",
+    tags: ["ignite", "execute", "periodic"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "LASER_EXECUTOR", thresholdFraction: 0.15, rangePx: 200, scanEvery: 1.5 }],
+    },
+  },
+  {
+    id: "RING_POISON_PLAGUE_DETONATION",
+    name: "Plague Detonation",
+    description: "Poisoned enemies explode on death for 50% of their max life as chaos damage.",
+    tier: "t0",
+    familyId: "poison",
+    tags: ["poison", "explosion", "death"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "POISONED_ENEMIES_EXPLODE_ON_DEATH", radius: 100, damageScalar: 0.5, damageType: "CHAOS" }],
+    },
+  },
+  {
+    id: "RING_IGNITE_SMOLDERING_DRAG",
+    name: "Smoldering Drag",
+    description: "Ignited enemies are slowed by 10%.",
+    tier: "t3",
+    familyId: "ignite",
+    tags: ["ignite", "slow", "control"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "BURNING_ENEMIES_MOVE_SPEED_REDUCED", reduced: 0.1 }],
+    },
+  },
+  {
+    id: "RING_POISON_WEAKENING_VENOM",
+    name: "Weakening Venom",
+    description: "Poisoned enemies deal 20% less damage.",
+    tier: "t2",
+    familyId: "poison",
+    tags: ["poison", "defense", "debuff"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "POISONED_ENEMIES_DAMAGE_REDUCED", reduced: 0.2 }],
+    },
+  },
+  {
+    id: "RING_PHYSICAL_RETALIATION_BURST",
+    name: "Retaliation Burst",
+    description: "Taking damage has a 30% chance to trigger an explosion, stunning nearby enemies for 1 second.",
+    tier: "t2",
+    familyId: "physical",
+    tags: ["physical", "stun", "retaliation"],
+    mainEffect: {
+      kind: "TRIGGERED",
+      triggerKey: "ON_PLAYER_HIT",
+      procChance: 0.3,
+      action: { kind: "STUN_EXPLOSION", radius: 120, stunDurationSec: 1 },
+    },
+  },
+  {
+    id: "RING_PHYSICAL_STAGGERING_BLOWS",
+    name: "Staggering Blows",
+    description: "Physical hits have a 5% chance to stun enemies for 0.5 seconds.",
+    tier: "t3",
+    familyId: "physical",
+    tags: ["physical", "stun", "hit"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "PHYSICAL_HIT_STUN_CHANCE", chance: 0.05, stunDurationSec: 0.5 }],
+    },
+  },
+  {
+    id: "RING_PHYSICAL_HEAVY_CHAMBER",
+    name: "Heavy Chamber",
+    description: "Every 4 seconds, empower your next shot to deal 50% increased physical damage.",
+    tier: "t2",
+    familyId: "physical",
+    tags: ["physical", "empower", "timed"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "TIMED_NEXT_SHOT_EMPOWER", chargeEvery: 4, physicalDamageIncreased: 0.5 }],
+    },
+  },
+  {
+    id: "RING_GENERIC_KILL_MOMENTUM",
+    name: "Kill Momentum",
+    description: "Killing an enemy empowers your next shot to deal 20% increased damage.",
+    tier: "t2",
+    familyId: "generic",
+    tags: ["generic", "empower", "kill"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "KILL_EMPOWER_NEXT_SHOT", damageIncreased: 0.2 }],
+    },
+  },
+  {
+    id: "RING_CRIT_CRITICAL_SPRINT",
+    name: "Critical Sprint",
+    description: "Critically striking grants 20% movement speed for 1 second.",
+    tier: "t0",
+    familyId: "crit",
+    tags: ["crit", "movement", "buff"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "CRIT_MOVE_SPEED_BUFF", moveSpeedIncreased: 0.2, durationSec: 1 }],
+    },
+  },
+  {
+    id: "RING_UTILITY_MIRROR_BAND",
+    name: "Mirror Band",
+    description: "Mirrors the effect of the ring to the left of this ring.",
+    tier: "t0",
+    familyId: "utility",
+    tags: ["utility", "mirror", "position"],
+    mainEffect: { kind: "MIRROR_LEFT_RING" },
+  },
+  {
+    id: "RING_UTILITY_AMPLIFYING_BAND",
+    name: "Amplifying Band",
+    description: "Increases the effect of surrounding rings by 50%.",
+    tier: "t0",
+    familyId: "utility",
+    tags: ["utility", "amplify", "position"],
+    mainEffect: { kind: "AMPLIFY_NEIGHBORS", increasedEffectBonus: 0.5 },
+  },
+  {
+    id: "RING_IGNITE_LIVING_BOMB",
+    name: "Living Bomb",
+    description: "Every 20 seconds, mark an enemy with Living Bomb. The marked enemy gains 50% movement speed and explodes on death, dealing 300% of maximum life as fire damage.",
+    tier: "t0",
+    familyId: "ignite",
+    tags: ["ignite", "mark", "explosion", "fire"],
+    mainEffect: {
+      kind: "COMBAT_RULES",
+      rules: [{ kind: "LIVING_BOMB", markEvery: 20, speedIncreased: 0.5, explosionDamageScalar: 3.0, explosionRadius: 150 }],
+    },
+  },
 ];
 
-export const RING_FAMILY_TALENT_TREES_V1: RingFamilyTalentTreeDef[] = RING_FAMILY_IDS.map(makeEmptyTree);
+function makeBoonNode(
+  familyId: string,
+  index: number,
+  name: string,
+  description: string,
+  mods: StatMod[],
+): RingTalentNodeDef {
+  return {
+    id: `BOON_${familyId.toUpperCase()}_${index}`,
+    name,
+    description,
+    requiresNodeIds: [],
+    cost: 1,
+    effect: { kind: "STAT_MODIFIERS", mods },
+  };
+}
+
+function makeFamilyTree(familyId: RingFamilyTalentTreeDef["familyId"]): RingFamilyTalentTreeDef {
+  switch (familyId) {
+    case "starter":
+      return makeEmptyTree(familyId);
+    case "generic":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Focused Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 2, "Quick Hands", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 3, "Light Feet", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
+        ],
+      };
+    case "physical":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Brute Force", "+15% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
+          makeBoonNode(familyId, 2, "Rapid Blows", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 3, "Precision", "+2% crit chance", [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.02 }]),
+          makeBoonNode(familyId, 4, "Toughness", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
+        ],
+      };
+    case "projectile":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Velocity", "+10% projectile speed", [{ key: STAT_KEYS.PROJECTILE_SPEED_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 2, "Impact", "+10% projectile damage", [{ key: STAT_KEYS.PROJECTILE_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 3, "Rapid Fire", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Sharpness", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+        ],
+      };
+    case "poison":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Virulence", "+15% poison DoT damage", [{ key: STAT_KEYS.DOT_POISON_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
+          makeBoonNode(familyId, 2, "Lingering Toxin", "+10% DoT duration", [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 3, "Toxic Touch", "+5% chance to poison", [{ key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Venomous Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+        ],
+      };
+    case "ignite":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Inferno", "+15% ignite DoT damage", [{ key: STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
+          makeBoonNode(familyId, 2, "Slow Burn", "+10% DoT duration", [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 3, "Kindle", "+5% chance to ignite", [{ key: STAT_KEYS.CHANCE_TO_IGNITE_ADD, op: "add", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Burning Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+        ],
+      };
+    case "dot":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Poison Mastery", "+15% poison DoT damage", [{ key: STAT_KEYS.DOT_POISON_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
+          makeBoonNode(familyId, 2, "Ignite Mastery", "+15% ignite DoT damage", [{ key: STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED, op: "increased", value: 0.15 }]),
+          makeBoonNode(familyId, 3, "Prolonged Agony", "+15% DoT duration", [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.15 }]),
+          makeBoonNode(familyId, 4, "Affliction Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+        ],
+      };
+    case "chaos":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Chaos Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 2, "Chaotic Speed", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 3, "Entropy", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Chaos Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
+        ],
+      };
+    case "crit":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Keen Eye", "+3% crit chance", [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.03 }]),
+          makeBoonNode(familyId, 2, "Devastating Blows", "+15% crit multi", [{ key: STAT_KEYS.CRIT_MULTI_ADD, op: "add", value: 0.15 }]),
+          makeBoonNode(familyId, 3, "Critical Force", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 4, "Lethal Tempo", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+        ],
+      };
+    case "trigger":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Trigger Force", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 2, "Trigger Tempo", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 3, "Trigger Agility", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Trigger Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
+        ],
+      };
+    case "health":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Fortitude", "+20 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 20 }]),
+          makeBoonNode(familyId, 2, "Constitution", "+10% life increased", [{ key: STAT_KEYS.LIFE_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 3, "Resilience", "+5% damage reduction", [{ key: STAT_KEYS.DAMAGE_REDUCTION_ADD, op: "add", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Life Force", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+        ],
+      };
+    case "defense":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Hardened", "+15 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 15 }]),
+          makeBoonNode(familyId, 2, "Iron Skin", "+5% damage reduction", [{ key: STAT_KEYS.DAMAGE_REDUCTION_ADD, op: "add", value: 0.05 }]),
+          makeBoonNode(familyId, 3, "Robust", "+5% life increased", [{ key: STAT_KEYS.LIFE_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 4, "Evasive", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+        ],
+      };
+    case "utility":
+      return {
+        familyId,
+        nodes: [
+          makeBoonNode(familyId, 1, "Swiftness", "+5% move speed", [{ key: STAT_KEYS.MOVE_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 2, "Alacrity", "+5% attack speed", [{ key: STAT_KEYS.GLOBAL_ATTACK_SPEED_INCREASED, op: "increased", value: 0.05 }]),
+          makeBoonNode(familyId, 3, "Utility Strikes", "+10% hit damage", [{ key: STAT_KEYS.GLOBAL_HIT_DAMAGE_INCREASED, op: "increased", value: 0.1 }]),
+          makeBoonNode(familyId, 4, "Utility Vitality", "+10 life", [{ key: STAT_KEYS.LIFE_ADD, op: "add", value: 10 }]),
+        ],
+      };
+    default:
+      return makeEmptyTree(familyId);
+  }
+}
+
+export const RING_FAMILY_TALENT_TREES_V1: RingFamilyTalentTreeDef[] = RING_FAMILY_IDS.map(makeFamilyTree);
 
 function validateTriggeredAction(
   action: TriggeredEffectActionDef,
@@ -796,6 +1141,25 @@ function validateTriggeredAction(
     case "APPLY_IGNITE_FROM_HIT":
       if (!Number.isFinite(action.damageScalar) || action.damageScalar < 0) {
         issues.push({ path: `${path}.damageScalar`, message: "Ignite damageScalar must be a non-negative finite number" });
+      }
+      return;
+    case "CHAIN_HIT":
+      if (!Number.isFinite(action.maxTargets) || action.maxTargets <= 0) {
+        issues.push({ path: `${path}.maxTargets`, message: "Chain maxTargets must be a positive finite number" });
+      }
+      if (!Number.isFinite(action.jumpRangePx) || action.jumpRangePx <= 0) {
+        issues.push({ path: `${path}.jumpRangePx`, message: "Chain jumpRangePx must be a positive finite number" });
+      }
+      if (!Number.isFinite(action.damageScalar) || action.damageScalar < 0) {
+        issues.push({ path: `${path}.damageScalar`, message: "Chain damageScalar must be a non-negative finite number" });
+      }
+      return;
+    case "STUN_EXPLOSION":
+      if (!Number.isFinite(action.radius) || action.radius <= 0) {
+        issues.push({ path: `${path}.radius`, message: "Stun explosion radius must be a positive finite number" });
+      }
+      if (!Number.isFinite(action.stunDurationSec) || action.stunDurationSec <= 0) {
+        issues.push({ path: `${path}.stunDurationSec`, message: "stunDurationSec must be a positive finite number" });
       }
       return;
     default:
@@ -860,6 +1224,11 @@ function validateCombatRule(
         issues.push({ path: `${path}.increasedPerRing`, message: "increasedPerRing must be a non-negative finite number" });
       }
       return;
+    case "PROJECTILE_HIT_DAMAGE_INCREASED_PER_PIERCED_ENEMY":
+      if (!Number.isFinite(rule.increasedPerEnemy) || rule.increasedPerEnemy < 0) {
+        issues.push({ path: `${path}.increasedPerEnemy`, message: "increasedPerEnemy must be a non-negative finite number" });
+      }
+      return;
     case "POISON_EXTRA_STACK_CHANCE":
       if (!Number.isFinite(rule.chance) || rule.chance < 0 || rule.chance > 1) {
         issues.push({ path: `${path}.chance`, message: "chance must be a finite value between 0 and 1" });
@@ -868,6 +1237,95 @@ function validateCombatRule(
     case "TRIGGER_PROC_CHANCE_INCREASED":
       if (!Number.isFinite(rule.increased) || rule.increased < 0) {
         issues.push({ path: `${path}.increased`, message: "increased must be a non-negative finite number" });
+      }
+      return;
+    case "POISONED_ENEMIES_EXPLODE_ON_DEATH":
+      if (!Number.isFinite(rule.radius) || rule.radius <= 0) {
+        issues.push({ path: `${path}.radius`, message: "radius must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.damageScalar) || rule.damageScalar <= 0 || rule.damageScalar > 5) {
+        issues.push({ path: `${path}.damageScalar`, message: "damageScalar must be a finite number between 0 (exclusive) and 5" });
+      }
+      return;
+    case "BURNING_ENEMIES_MOVE_SPEED_REDUCED":
+      if (!Number.isFinite(rule.reduced) || rule.reduced <= 0 || rule.reduced > 1) {
+        issues.push({ path: `${path}.reduced`, message: "reduced must be a finite number between 0 (exclusive) and 1" });
+      }
+      return;
+    case "POISONED_ENEMIES_DAMAGE_REDUCED":
+      if (!Number.isFinite(rule.reduced) || rule.reduced <= 0 || rule.reduced > 1) {
+        issues.push({ path: `${path}.reduced`, message: "reduced must be a finite number between 0 (exclusive) and 1" });
+      }
+      return;
+    case "POISON_TRAIL":
+      if (!Number.isFinite(rule.radius) || rule.radius <= 0) {
+        issues.push({ path: `${path}.radius`, message: "radius must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.poisonDps) || rule.poisonDps <= 0) {
+        issues.push({ path: `${path}.poisonDps`, message: "poisonDps must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.tickEvery) || rule.tickEvery <= 0) {
+        issues.push({ path: `${path}.tickEvery`, message: "tickEvery must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.trailTtl) || rule.trailTtl <= 0) {
+        issues.push({ path: `${path}.trailTtl`, message: "trailTtl must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.dropEvery) || rule.dropEvery <= 0) {
+        issues.push({ path: `${path}.dropEvery`, message: "dropEvery must be a positive finite number" });
+      }
+      return;
+    case "LASER_EXECUTOR":
+      if (!Number.isFinite(rule.thresholdFraction) || rule.thresholdFraction <= 0 || rule.thresholdFraction >= 1) {
+        issues.push({ path: `${path}.thresholdFraction`, message: "thresholdFraction must be a finite number between 0 and 1 (exclusive)" });
+      }
+      if (!Number.isFinite(rule.rangePx) || rule.rangePx <= 0) {
+        issues.push({ path: `${path}.rangePx`, message: "rangePx must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.scanEvery) || rule.scanEvery <= 0) {
+        issues.push({ path: `${path}.scanEvery`, message: "scanEvery must be a positive finite number" });
+      }
+      return;
+    case "PHYSICAL_HIT_STUN_CHANCE":
+      if (!Number.isFinite(rule.chance) || rule.chance <= 0 || rule.chance > 1) {
+        issues.push({ path: `${path}.chance`, message: "chance must be a finite value between 0 (exclusive) and 1" });
+      }
+      if (!Number.isFinite(rule.stunDurationSec) || rule.stunDurationSec <= 0) {
+        issues.push({ path: `${path}.stunDurationSec`, message: "stunDurationSec must be a positive finite number" });
+      }
+      return;
+    case "TIMED_NEXT_SHOT_EMPOWER":
+      if (!Number.isFinite(rule.chargeEvery) || rule.chargeEvery <= 0) {
+        issues.push({ path: `${path}.chargeEvery`, message: "chargeEvery must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.physicalDamageIncreased) || rule.physicalDamageIncreased <= 0) {
+        issues.push({ path: `${path}.physicalDamageIncreased`, message: "physicalDamageIncreased must be a positive finite number" });
+      }
+      return;
+    case "KILL_EMPOWER_NEXT_SHOT":
+      if (!Number.isFinite(rule.damageIncreased) || rule.damageIncreased <= 0) {
+        issues.push({ path: `${path}.damageIncreased`, message: "damageIncreased must be a positive finite number" });
+      }
+      return;
+    case "CRIT_MOVE_SPEED_BUFF":
+      if (!Number.isFinite(rule.moveSpeedIncreased) || rule.moveSpeedIncreased <= 0) {
+        issues.push({ path: `${path}.moveSpeedIncreased`, message: "moveSpeedIncreased must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.durationSec) || rule.durationSec <= 0) {
+        issues.push({ path: `${path}.durationSec`, message: "durationSec must be a positive finite number" });
+      }
+      return;
+    case "LIVING_BOMB":
+      if (!Number.isFinite(rule.markEvery) || rule.markEvery <= 0) {
+        issues.push({ path: `${path}.markEvery`, message: "markEvery must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.speedIncreased) || rule.speedIncreased <= 0) {
+        issues.push({ path: `${path}.speedIncreased`, message: "speedIncreased must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.explosionDamageScalar) || rule.explosionDamageScalar <= 0) {
+        issues.push({ path: `${path}.explosionDamageScalar`, message: "explosionDamageScalar must be a positive finite number" });
+      }
+      if (!Number.isFinite(rule.explosionRadius) || rule.explosionRadius <= 0) {
+        issues.push({ path: `${path}.explosionRadius`, message: "explosionRadius must be a positive finite number" });
       }
       return;
     case "PIERCE_POISONED_TARGETS":
@@ -879,6 +1337,24 @@ function validateCombatRule(
       return;
     default:
       issues.push({ path: `${path}.kind`, message: `Unsupported combat rule: ${String((rule as { kind?: unknown }).kind)}` });
+  }
+}
+
+function validateWeaponFireRule(
+  rule: WeaponFireRuleDef,
+  path: string,
+  issues: RingContentValidationIssue[],
+): void {
+  if (!rule || typeof rule !== "object") {
+    issues.push({ path, message: "Weapon fire rule must be an object" });
+    return;
+  }
+
+  switch (rule.kind) {
+    case "BACKFIRE_PROJECTILE":
+      return;
+    default:
+      issues.push({ path: `${path}.kind`, message: `Unsupported weapon fire rule: ${String((rule as { kind?: unknown }).kind)}` });
   }
 }
 
@@ -1014,6 +1490,17 @@ function validateEffectDef(effect: EffectDef, path: string, issues: RingContentV
     return;
   }
 
+  if (effect.kind === "WEAPON_FIRE_RULES") {
+    if (!Array.isArray(effect.rules) || effect.rules.length <= 0) {
+      issues.push({ path: `${path}.rules`, message: "WEAPON_FIRE_RULES requires a non-empty rules[]" });
+      return;
+    }
+    for (let i = 0; i < effect.rules.length; i++) {
+      validateWeaponFireRule(effect.rules[i], `${path}.rules[${i}]`, issues);
+    }
+    return;
+  }
+
   if (effect.kind === "TRIGGERED") {
     if (!VALID_TRIGGER_KEYS.has(effect.triggerKey)) {
       issues.push({ path: `${path}.triggerKey`, message: `Unknown trigger key: ${String(effect.triggerKey)}` });
@@ -1039,6 +1526,17 @@ function validateEffectDef(effect: EffectDef, path: string, issues: RingContentV
   if (effect.kind === "HAND_STRUCTURE") {
     if (!HAND_EFFECT_TYPES.includes(effect.effectType)) {
       issues.push({ path: `${path}.effectType`, message: `Unknown hand effect type: ${String(effect.effectType)}` });
+    }
+    return;
+  }
+
+  if (effect.kind === "MIRROR_LEFT_RING") {
+    return;
+  }
+
+  if (effect.kind === "AMPLIFY_NEIGHBORS") {
+    if (!Number.isFinite(effect.increasedEffectBonus) || effect.increasedEffectBonus <= 0) {
+      issues.push({ path: `${path}.increasedEffectBonus`, message: "increasedEffectBonus must be a positive finite number" });
     }
     return;
   }
@@ -1101,10 +1599,6 @@ export function validateRingContent(
       issues.push({ path: `${treePath}.familyId`, message: `Duplicate family tree: ${tree.familyId}` });
     }
     familyIds.add(tree.familyId);
-
-    if (tree.nodes.length > 0) {
-      issues.push({ path: `${treePath}.nodes`, message: "V1 ring families must not author talent nodes in this pass" });
-    }
 
     const localNodeIds = new Set<string>();
     for (let j = 0; j < tree.nodes.length; j++) {

@@ -21,12 +21,12 @@ Summary:
 
 | Metric | Count | Notes |
 |---|---:|---|
-| Total shipped authored rings | 49 | All entries in `RING_DEFS_V1`. |
+| Total shipped authored rings | 65 | All entries in `RING_DEFS_V1`. |
 | Starter-only rings | 5 | `familyId: "starter"`; installed by starter loadout. |
-| Normal reward-eligible rings | 44 | Generated ring rewards filter out starter-family rings. |
+| Normal reward-eligible rings | 60 | Generated ring rewards filter out starter-family rings. |
 | Empty authored families | 1 | `defense` has a family tree but no rings yet. |
 
-No source/doc conflict was found for the active current pool count. The roadmap's older "current 29 rings" language is now superseded by the 49-ring source audit.
+No source/doc conflict was found for the active current pool count. The roadmap's older "current 29 rings" language is now superseded by the 57-ring source audit.
 
 ## Tier Distribution
 
@@ -34,19 +34,19 @@ All shipped rings:
 
 | Tier | Count |
 |---|---:|
-| `t0` | 3 |
-| `t1` | 18 |
-| `t2` | 13 |
-| `t3` | 15 |
+| `t0` | 10 |
+| `t1` | 20 |
+| `t2` | 18 |
+| `t3` | 17 |
 
 Normal reward-eligible rings only:
 
 | Tier | Count |
 |---|---:|
-| `t0` | 3 |
-| `t1` | 18 |
-| `t2` | 9 |
-| `t3` | 14 |
+| `t0` | 10 |
+| `t1` | 20 |
+| `t2` | 14 |
+| `t3` | 16 |
 
 Starter rings account for four `t2` rings and one `t3` ring, but do not appear in normal generated ring rewards.
 
@@ -57,15 +57,15 @@ All shipped rings:
 | Family | Count |
 |---|---:|
 | starter | 5 |
-| generic | 7 |
-| physical | 4 |
-| projectile | 6 |
+| generic | 8 |
+| physical | 7 |
+| projectile | 8 |
 | dot | 3 |
 | chaos | 1 |
-| poison | 3 |
-| ignite | 3 |
-| crit | 2 |
-| trigger | 8 |
+| poison | 6 |
+| ignite | 5 |
+| crit | 3 |
+| trigger | 9 |
 | health | 4 |
 | defense | 0 |
 | utility | 3 |
@@ -74,15 +74,15 @@ Normal reward-eligible rings only:
 
 | Family | Count |
 |---|---:|
-| generic | 7 |
-| physical | 4 |
-| projectile | 6 |
+| generic | 8 |
+| physical | 7 |
+| projectile | 8 |
 | dot | 3 |
 | chaos | 1 |
-| poison | 3 |
-| ignite | 3 |
-| crit | 2 |
-| trigger | 8 |
+| poison | 6 |
+| ignite | 5 |
+| crit | 3 |
+| trigger | 9 |
 | health | 4 |
 | defense | 0 |
 | utility | 3 |
@@ -109,9 +109,11 @@ Normal reward-eligible rings only:
 | Physical Devotion | `RING_PHYSICAL_DEVOTION` | physical | `t1` | Yes |
 | +1 Projectile | `RING_PROJECTILE_ADDITIONAL_PROJECTILES_1` | projectile | `t1` | Yes |
 | +1 Pierce | `RING_PROJECTILE_GAIN_PIERCE_1` | projectile | `t2` | Yes |
+| Piercing Momentum | `RING_PROJECTILE_PIERCING_MOMENTUM` | projectile | `t1` | Yes |
 | Sharpened Tip | `RING_PROJECTILE_DAMAGE_INCREASED_10` | projectile | `t3` | Yes |
 | Ricochet Rounds | `RING_PROJECTILE_BOUNCE_ADD_1` | projectile | `t1` | Yes |
 | Scatter Shot | `RING_PROJECTILE_SCATTER_SHOT` | projectile | `t0` | Yes |
+| Backfire Shot | `RING_PROJECTILE_BACKFIRE_SHOT` | projectile | `t0` | Yes |
 | Close Quarters Guard | `RING_PROJECTILE_CLOSE_QUARTERS_GUARD` | projectile | `t2` | Yes |
 | 50% More Damage Over Time | `RING_DOT_DAMAGE_OVER_TIME_MORE_50` | dot | `t2` | Yes |
 | DOT Specialist | `RING_DOT_SPECIALIST` | dot | `t1` | Yes |
@@ -126,6 +128,7 @@ Normal reward-eligible rings only:
 | Crit Rolls Twice | `RING_CRIT_ROLLS_TWICE` | crit | `t1` | Yes |
 | Lucky Scratch | `RING_CRIT_CHANCE_PERCENT_5` | crit | `t3` | Yes |
 | Bazooka on Hit | `RING_TRIGGER_BAZOOKA_ON_HIT` | trigger | `t0` | Yes |
+| Lightning Chain | `RING_TRIGGER_LIGHTNING_CHAIN` | trigger | `t0` | Yes |
 | Spark on Hit | `RING_TRIGGER_SPARK_ON_HIT` | trigger | `t2` | Yes |
 | Explode on Kill | `RING_TRIGGER_EXPLODE_ON_KILL` | trigger | `t1` | Yes |
 | Dagger on Kill | `RING_TRIGGER_DAGGER_ON_KILL` | trigger | `t2` | Yes |
@@ -140,6 +143,16 @@ Normal reward-eligible rings only:
 | Wider Selection | `RING_UTILITY_WIDER_SELECTION` | utility | `t1` | Yes |
 | Curated Rewards | `RING_UTILITY_CURATED_REWARDS` | utility | `t1` | Yes |
 | Selective Hand | `RING_UTILITY_SELECTIVE_HAND` | utility | `t1` | Yes |
+| Poison Trail | `RING_POISON_POISON_TRAIL` | poison | `t2` | Yes |
+| Laser Executor | `RING_IGNITE_LASER_EXECUTOR` | ignite | `t1` | Yes |
+| Plague Detonation | `RING_POISON_PLAGUE_DETONATION` | poison | `t0` | Yes |
+| Smoldering Drag | `RING_IGNITE_SMOLDERING_DRAG` | ignite | `t3` | Yes |
+| Weakening Venom | `RING_POISON_WEAKENING_VENOM` | poison | `t2` | Yes |
+| Retaliation Burst | `RING_PHYSICAL_RETALIATION_BURST` | physical | `t2` | Yes |
+| Staggering Blows | `RING_PHYSICAL_STAGGERING_BLOWS` | physical | `t3` | Yes |
+| Heavy Chamber | `RING_PHYSICAL_HEAVY_CHAMBER` | physical | `t2` | Yes |
+| Kill Momentum | `RING_GENERIC_KILL_MOMENTUM` | generic | `t2` | Yes |
+| Critical Sprint | `RING_CRIT_CRITICAL_SPRINT` | crit | `t0` | Yes |
 
 ## Target List
 
@@ -157,13 +170,13 @@ Target pool size:
 
 | Pool Segment | Count | Notes |
 |---|---:|---|
-| Shipped authored rings | 49 | Includes 5 starter-only rings and 44 normal reward-eligible rings. |
-| Unshipped non-block target candidates | 16 | New Locked plus unshipped New Tentative candidates, excluding block-dependent rings. |
+| Shipped authored rings | 62 | Includes 5 starter-only rings and 57 normal reward-eligible rings. |
+| Unshipped non-block target candidates | 3 | New Locked plus unshipped New Tentative candidates, excluding block-dependent rings and the Phase 3–4 rings now shipped. |
 | Non-block target authored ring total | 65 | Current shipped rings plus all active non-block candidates. |
 | Non-block target normal reward-eligible total | 60 | Total non-block target minus 5 starter-only rings. |
 | Deferred block reserve | 9 | Panic Guard plus the tiering sheet block group. |
 
-The final target list for this completion pass is therefore the current 49 shipped rings plus the 16 non-block candidates below.
+The final target list for this completion pass is therefore the current 62 shipped rings plus the 3 non-block candidates below.
 
 ### Included Unshipped Candidates
 
@@ -175,16 +188,13 @@ The final target list for this completion pass is therefore the current 49 shipp
 | Staggering Blows | physical | `t3` | New Locked Rings | Include |
 | Mirror Band | other | `t0` | New Locked Rings | Include |
 | Amplifying Band | other | `t0` | New Locked Rings | Include |
-| Piercing Momentum | projectile | `t1` | New Tentative Rings | Include |
 | Smoldering Drag | ignite | `t3` | New Tentative Rings | Include |
 | Weakening Venom | poison | `t2` | New Tentative Rings | Include |
 | Heavy Chamber | physical | `t2` | New Tentative Rings | Include |
 | Kill Momentum | generic | `t2` | New Tentative Rings | Include |
-| Lightning Chain | trigger / lightning | `t0` | New Tentative Rings | Include |
 | Plague Detonation | poison / chaos | `t0` | New Tentative Rings | Include |
 | Critical Sprint | crit | `t0` | New Tentative Rings | Include |
 | Living Bomb | fire | `t0` | New Tentative Rings | Include |
-| Backfire Shot | projectile | `t0` | New Tentative Rings | Include |
 
 ### Already Shipped From Tentative Candidates
 
@@ -210,6 +220,19 @@ These candidates already moved from the tiering sheet into `RING_DEFS_V1` during
 - Wider Selection
 - Curated Rewards
 - Selective Hand
+- Piercing Momentum
+- Backfire Shot
+- Lightning Chain
+- Poison Trail
+- Laser Executor
+- Plague Detonation
+- Smoldering Drag
+- Weakening Venom
+- Retaliation Burst
+- Staggering Blows
+- Heavy Chamber
+- Kill Momentum
+- Critical Sprint
 
 ### Deferred Block Reserve Candidates
 
@@ -237,15 +260,15 @@ Summary:
 
 | Classification | Count | Notes |
 |---|---:|---|
-| Already shipped | 49 | Current `RING_DEFS_V1`; includes the content-only, projectile stat expansion, conditional combat-rule, health/floor lifecycle, and reward manipulation batches. |
+| Already shipped | 62 | Current `RING_DEFS_V1`; includes the content-only, projectile stat expansion, conditional combat-rule, health/floor lifecycle, reward manipulation, projectile/trigger mechanics, poison/ignite hazard, and physical control/empower batches. |
 | Ready with current systems | 0 | No unshipped target candidate remains exact content-only. |
-| Ready after small system upgrade | 4 | Needs one focused primitive, stat key, trigger match, reward knob, or rule consumer. |
-| Needs larger new system | 12 | Needs new runtime state, status/effect framework, periodic scanner, graph behavior, or significant presentation/runtime loop. |
+| Ready after small system upgrade | 0 | All small-upgrade candidates are now shipped. |
+| Needs larger new system | 3 | Needs new runtime state, status/effect framework, periodic scanner, graph behavior, or significant presentation/runtime loop. |
 | Intentionally deferred reserve | 9 | Block-dependent rings outside the non-block completion pool. |
 
 ### Already Shipped
 
-All 49 current `RING_DEFS_V1` entries are already implemented and validated. The previously "ready with current systems" filler/enabler set and the first small-upgrade batches are now shipped:
+All 62 current `RING_DEFS_V1` entries are already implemented and validated. The previously "ready with current systems" filler/enabler set and all small-upgrade batches are now shipped:
 
 - Small Damage Band
 - Quick Step
@@ -267,6 +290,19 @@ All 49 current `RING_DEFS_V1` entries are already implemented and validated. The
 - Wider Selection
 - Curated Rewards
 - Selective Hand
+- Piercing Momentum
+- Backfire Shot
+- Lightning Chain
+- Poison Trail
+- Laser Executor
+- Plague Detonation
+- Smoldering Drag
+- Weakening Venom
+- Retaliation Burst
+- Staggering Blows
+- Heavy Chamber
+- Kill Momentum
+- Critical Sprint
 
 ### Ready With Current Systems
 
@@ -274,33 +310,17 @@ No unshipped target candidates are exact content-only under current systems.
 
 ### Ready After Small System Upgrade
 
-These target candidates fit the current architecture, but each needs one focused support primitive before content can be authored exactly.
-
-| Ring | Needed Upgrade | Notes |
-|---|---|---|
-| Piercing Momentum | Track per-projectile pierced-hit count and scale later hits. | Pierce exists, but damage resolution does not know how many enemies the projectile already pierced. |
-| Plague Detonation | Add poisoned-target death trigger condition. | Death explosion and chaos damage exist; poisoned-only condition does not. |
-| Lightning Chain | Add chain trigger action or multi-target no-collide action. | Existing triggered projectiles target one enemy. |
-| Backfire Shot | Add weapon-fire modifier for rear projectile outside projectile count. | Needs firing-pipeline support, not just stat resolution. |
+All small-upgrade candidates are now shipped.
 
 ### Needs Larger New System
 
-These target candidates should wait for their owning systems because they need new runtime state, enemy status effects, periodic loops, effect graphs, or visual/runtime workflows.
+All candidates in this category have been shipped (Phases 5 & 6).
 
-| Ring | Needed System | Notes |
+| Ring | Needed System | Status |
 |---|---|---|
-| Poison Trail | Player trail hazard plus poison-zone application. | Zones exist, but not player trail spawning or poison-only enemy ailment zones. |
-| Laser Executor | Low-life execute scanner plus beam presentation. | Triggered effects are event-driven; this needs periodic nearby enemy execution. |
-| Retaliation Burst | Player-damage trigger support plus enemy stun. | Player-hit events exist, but progression triggers currently focus on outgoing hit/kill/crit; stun is not a general enemy status. |
-| Staggering Blows | Enemy stun status and hit rule. | Needs stun storage, AI/combat consumption, and visuals. |
-| Mirror Band | Neighbor-ring effect graph. | Requires slot-position dependency resolution and loop prevention. |
-| Amplifying Band | Neighbor-ring effect scaling graph. | Similar to Mirror Band, but modifies adjacent authored/runtime effects. |
-| Smoldering Drag | Enemy slow status tied to ignite. | Ignite exists; slow as a general enemy status/effect consumer does not. |
-| Weakening Venom | Poisoned-enemy outgoing damage reduction. | Needs incoming-player-damage rule that reads attacker ailment state. |
-| Heavy Chamber | Timed next-shot empower state. | Permanent finger empowerment exists; temporary next-shot empower is a separate runtime. |
-| Kill Momentum | Kill-triggered next-shot empower state. | Depends on the same next-shot empower runtime plus kill-event grant. |
-| Critical Sprint | Temporary player stat buff on crit. | `ON_CRIT` exists, but timed buff state/stat expiry does not. |
-| Living Bomb | Timed mark, enemy speed buff, and death explosion link. | Needs mark state, enemy modifier, targeting cadence, and death payload. |
+| Mirror Band | Neighbor-ring effect graph. | Done (Phase 5) |
+| Amplifying Band | Neighbor-ring effect scaling graph. | Done (Phase 5) |
+| Living Bomb | Timed mark, enemy speed buff, and death explosion link. | Done (Phase 6) |
 
 ### Deferred Block Reserve
 
@@ -424,13 +444,61 @@ Implemented support:
 - Added a one-use reward overlay reroll button for eligible floor-completion ring rewards.
 - Added targeted reward generation/flow tests plus ring content and catalog smoke coverage.
 
+## Completed Projectile/Trigger Mechanics Batch
+
+Completed code-bearing contract:
+
+`docs/contracts/implemented/rings/ratgame_projectile_trigger_mechanics_mini_batch.md`
+
+Implemented batch: **Projectile/Trigger Mechanics Mini-Batch**.
+
+This batch shipped exactly these 3 rings:
+
+| Ring | Tier | Runtime Family | Exact Effect |
+|---|---|---|---|
+| Piercing Momentum | `t1` | projectile | Projectiles gain 30% increased damage for each enemy they have pierced. |
+| Backfire Shot | `t0` | projectile | Also fire a projectile behind you. This projectile is not modified by projectile count. |
+| Lightning Chain | `t0` | trigger | On hit: 25% chance to chain lightning to up to 3 other targets, dealing 100% of hit damage to each. |
+
+Implemented support:
+
+- Added per-projectile normal-pierce tracking for pierce momentum damage scaling.
+- Added weapon-fire runtime effects for one rear projectile per projectile firing cycle.
+- Added direct chain-hit triggered actions for bounded multi-target trigger damage.
+- Added targeted combat-rule, trigger, runtime, ring content, catalog, reward, and vendor coverage.
+
+## Completed Poison/Ignite Hazard Batch
+
+Implemented batch: **Poison/Ignite Hazard Mini-Batch**.
+
+This batch shipped exactly these 5 rings:
+
+| Ring | Tier | Runtime Family | Exact Effect |
+|---|---|---|---|
+| Poison Trail | `t2` | poison | Leave a poison trail behind you that poisons enemies. |
+| Laser Executor | `t1` | ignite | Periodically execute nearby enemies below 15% life. |
+| Plague Detonation | `t0` | poison | Poisoned enemies explode on death for 50% of their max life as chaos damage. |
+| Smoldering Drag | `t3` | ignite | Ignited enemies are slowed by 10%. |
+| Weakening Venom | `t2` | poison | Poisoned enemies deal 20% less damage. |
+
+Implemented support:
+
+- Added 5 new combat rule types: POISON_TRAIL, LASER_EXECUTOR, POISONED_ENEMIES_EXPLODE_ON_DEATH, BURNING_ENEMIES_MOVE_SPEED_REDUCED, POISONED_ENEMIES_DAMAGE_REDUCED.
+- Added poison trail zone spawner with periodic drop and poison-stack application.
+- Added laser executor periodic scan-and-execute for low-life enemies.
+- Added burning enemy movement slow in movement system.
+- Added poisoned enemy contact damage reduction in collisions system.
+- Added poisoned enemy death explosion in finalize system.
+- Added ZONE_KIND.POISON for poison trail zones.
+- Added targeted combat-rule snapshot, poison trail, laser executor, ring content, and catalog smoke coverage.
+
 ## Non-Block Completion Phased Plan
 
 Goal: finish every non-block ring in the active target pool before returning to block mechanics.
 
 Scope:
 
-- Implement the 16 remaining unshipped non-block target candidates.
+- Implement the 8 remaining unshipped non-block target candidates.
 - Keep the 9 block-dependent rings deferred: Panic Guard plus the 8 block reserve rings.
 - Create one code-bearing contract per batch under `docs/contracts/draft/rings/`.
 - Implement and verify one batch at a time, then move the contract to `docs/contracts/implemented/rings/`.
@@ -440,11 +508,11 @@ Progress summary:
 | Phase | Batch | Ring Count | Status | Contract |
 |---:|---|---:|---|---|
 | 1 | Reward Manipulation Mini-Batch | 3 | Done | `docs/contracts/implemented/rings/ratgame_reward_manipulation_mini_batch.md` |
-| 2 | Projectile/Trigger Mechanics Mini-Batch | 3 | Planned next | `docs/contracts/draft/rings/ratgame_projectile_trigger_mechanics_mini_batch.md` |
-| 3 | Poison/Ignite Hazard Mini-Batch | 5 | Planned | `docs/contracts/draft/rings/ratgame_poison_ignite_hazard_mini_batch.md` |
-| 4 | Physical Control/Empower Mini-Batch | 5 | Planned | `docs/contracts/draft/rings/ratgame_physical_control_empower_mini_batch.md` |
-| 5 | Slot Position Chase Mini-Batch | 2 | Planned | `docs/contracts/draft/rings/ratgame_slot_position_chase_mini_batch.md` |
-| 6 | Living Bomb Setpiece Mini-Batch | 1 | Planned | `docs/contracts/draft/rings/ratgame_living_bomb_setpiece_mini_batch.md` |
+| 2 | Projectile/Trigger Mechanics Mini-Batch | 3 | Done | `docs/contracts/implemented/rings/ratgame_projectile_trigger_mechanics_mini_batch.md` |
+| 3 | Poison/Ignite Hazard Mini-Batch | 5 | Done | `docs/contracts/implemented/rings/ratgame_poison_ignite_hazard_mini_batch.md` |
+| 4 | Physical Control/Empower Mini-Batch | 5 | Done | — |
+| 5 | Slot Position Chase Mini-Batch | 2 | Done | — |
+| 6 | Living Bomb Setpiece Mini-Batch | 1 | Done | — |
 
 ### Phase 1: Reward Manipulation Mini-Batch
 
@@ -464,7 +532,7 @@ Why this comes first:
 
 ### Phase 2: Projectile/Trigger Mechanics Mini-Batch
 
-Implement exactly these 3 rings:
+Implemented exactly these 3 rings:
 
 | Ring | Proposed Ring ID | Tier | Runtime Family | Exact Effect Direction | Main Upgrade |
 |---|---|---|---|---|---|

@@ -16,6 +16,7 @@ export type TriggerKey =
   | "ON_TICK"
   | "ON_DODGE"
   | "ON_MOVE"
+  | "ON_PLAYER_HIT"
   | "OTHER";
 
 export type DamageCause =

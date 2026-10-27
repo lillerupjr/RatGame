@@ -57,6 +57,7 @@ export type ProgressionRewardOptionView = {
   family: ProgressionRewardFamily;
   title: string;
   subtitle: string;
+  description?: string;
   authoredTier?: RingTier;
   rolledTier?: RingTier;
 };
@@ -191,7 +192,16 @@ function generateRingOptions(
   optionCount: number,
   generationOptions: RingRewardGenerationOptions = {},
 ): ProgressionRewardOption[] {
-  const remaining = getRewardEligibleRingDefs();
+  const allEligible = getRewardEligibleRingDefs();
+
+  // Exclude ring defs the player already has equipped
+  const state = ensureRingProgressionState(world);
+  const equippedDefIds = new Set(
+    Object.values(state.ringsByInstanceId).map((inst) => inst.defId),
+  );
+  const filtered = allEligible.filter((def) => !equippedDefIds.has(def.id));
+  // Fall back to full pool if too few candidates remain
+  const remaining = filtered.length >= optionCount ? [...filtered] : [...allEligible];
   const options: RingRewardOption[] = [];
   const max = Math.min(Math.max(0, optionCount), remaining.length);
 
@@ -274,6 +284,7 @@ export function progressionRewardOptionView(
       family: option.family,
       title: def?.name ?? option.ringDefId,
       subtitle: def ? `${option.authoredTier} ${def.familyId} ring` : "Ring",
+      description: def?.description,
       authoredTier: option.authoredTier,
       rolledTier: option.rolledTier,
     };

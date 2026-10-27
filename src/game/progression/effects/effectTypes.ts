@@ -92,6 +92,15 @@ export type RewardRulesEffectDef = {
   rules: RewardRuleDef[];
 };
 
+export type WeaponFireRuleDef = {
+  kind: "BACKFIRE_PROJECTILE";
+};
+
+export type WeaponFireRulesEffectDef = {
+  kind: "WEAPON_FIRE_RULES";
+  rules: WeaponFireRuleDef[];
+};
+
 export type TriggeredEffectDef = {
   kind: "TRIGGERED";
   triggerKey: TriggerKey;
@@ -151,12 +160,28 @@ export type ApplyIgniteFromHitTriggeredActionDef = {
   damageScalar: number;
 };
 
+export type ChainHitTriggeredActionDef = {
+  kind: "CHAIN_HIT";
+  maxTargets: number;
+  jumpRangePx: number;
+  damageScalar: number;
+  damageType: TriggerDamageType;
+};
+
+export type StunExplosionTriggeredActionDef = {
+  kind: "STUN_EXPLOSION";
+  radius: number;
+  stunDurationSec: number;
+};
+
 export type TriggeredEffectActionDef =
   | GainArmorTriggeredActionDef
   | SpawnProjectileTriggeredActionDef
   | DeathExplosionTriggeredActionDef
   | SpreadIgniteTriggeredActionDef
-  | ApplyIgniteFromHitTriggeredActionDef;
+  | ApplyIgniteFromHitTriggeredActionDef
+  | ChainHitTriggeredActionDef
+  | StunExplosionTriggeredActionDef;
 
 export type EveryNthShotCritsCombatRule = {
   kind: "EVERY_NTH_SHOT_CRITS";
@@ -207,6 +232,11 @@ export type PhysicalHitDamageIncreasedPerEquippedFamilyRingCombatRule = {
   increasedPerRing: number;
 };
 
+export type ProjectileHitDamageIncreasedPerPiercedEnemyCombatRule = {
+  kind: "PROJECTILE_HIT_DAMAGE_INCREASED_PER_PIERCED_ENEMY";
+  increasedPerEnemy: number;
+};
+
 export type CritRollsTwiceCombatRule = {
   kind: "CRIT_ROLLS_TWICE";
 };
@@ -237,6 +267,70 @@ export type RetryFailedTriggerProcsOnceCombatRule = {
   kind: "RETRY_FAILED_TRIGGER_PROCS_ONCE";
 };
 
+export type PoisonedEnemiesExplodeOnDeathCombatRule = {
+  kind: "POISONED_ENEMIES_EXPLODE_ON_DEATH";
+  radius: number;
+  damageScalar: number;
+  damageType: TriggerDamageType;
+};
+
+export type BurningEnemiesMoveSpeedReducedCombatRule = {
+  kind: "BURNING_ENEMIES_MOVE_SPEED_REDUCED";
+  reduced: number;
+};
+
+export type PoisonedEnemiesDamageReducedCombatRule = {
+  kind: "POISONED_ENEMIES_DAMAGE_REDUCED";
+  reduced: number;
+};
+
+export type PoisonTrailCombatRule = {
+  kind: "POISON_TRAIL";
+  radius: number;
+  poisonDps: number;
+  tickEvery: number;
+  trailTtl: number;
+  dropEvery: number;
+};
+
+export type LaserExecutorCombatRule = {
+  kind: "LASER_EXECUTOR";
+  thresholdFraction: number;
+  rangePx: number;
+  scanEvery: number;
+};
+
+export type PhysicalHitStunChanceCombatRule = {
+  kind: "PHYSICAL_HIT_STUN_CHANCE";
+  chance: number;
+  stunDurationSec: number;
+};
+
+export type TimedNextShotEmpowerCombatRule = {
+  kind: "TIMED_NEXT_SHOT_EMPOWER";
+  chargeEvery: number;
+  physicalDamageIncreased: number;
+};
+
+export type KillEmpowerNextShotCombatRule = {
+  kind: "KILL_EMPOWER_NEXT_SHOT";
+  damageIncreased: number;
+};
+
+export type CritMoveSpeedBuffCombatRule = {
+  kind: "CRIT_MOVE_SPEED_BUFF";
+  moveSpeedIncreased: number;
+  durationSec: number;
+};
+
+export type LivingBombCombatRule = {
+  kind: "LIVING_BOMB";
+  markEvery: number;
+  speedIncreased: number;
+  explosionDamageScalar: number;
+  explosionRadius: number;
+};
+
 export type CombatRuleDef =
   | EveryNthShotCritsCombatRule
   | PiercePoisonedTargetsCombatRule
@@ -247,13 +341,24 @@ export type CombatRuleDef =
   | NoPierceNearbyHitDamageIncreasedCombatRule
   | PhysicalHitDamageIncreasedNonPhysicalSuppressedCombatRule
   | PhysicalHitDamageIncreasedPerEquippedFamilyRingCombatRule
+  | ProjectileHitDamageIncreasedPerPiercedEnemyCombatRule
   | CritRollsTwiceCombatRule
   | TriggeredHitsCanApplyDotsCombatRule
   | ConvertAllHitDamageToChaosCombatRule
   | PoisonExtraStackChanceCombatRule
   | DoubleTriggersCombatRule
   | TriggerProcChanceIncreasedCombatRule
-  | RetryFailedTriggerProcsOnceCombatRule;
+  | RetryFailedTriggerProcsOnceCombatRule
+  | PoisonedEnemiesExplodeOnDeathCombatRule
+  | BurningEnemiesMoveSpeedReducedCombatRule
+  | PoisonedEnemiesDamageReducedCombatRule
+  | PoisonTrailCombatRule
+  | LaserExecutorCombatRule
+  | PhysicalHitStunChanceCombatRule
+  | TimedNextShotEmpowerCombatRule
+  | KillEmpowerNextShotCombatRule
+  | CritMoveSpeedBuffCombatRule
+  | LivingBombCombatRule;
 
 export type CombatRulesEffectDef = {
   kind: "COMBAT_RULES";
@@ -266,14 +371,26 @@ export type StructuralHandEffectDef = {
   params?: Record<string, unknown>;
 };
 
+export type MirrorLeftRingEffectDef = {
+  kind: "MIRROR_LEFT_RING";
+};
+
+export type AmplifyNeighborsEffectDef = {
+  kind: "AMPLIFY_NEIGHBORS";
+  increasedEffectBonus: number;
+};
+
 export type EffectDef =
   | StatModifierEffectDef
   | DynamicStatModifierEffectDef
   | FloorLifecycleEffectDef
   | RewardRulesEffectDef
+  | WeaponFireRulesEffectDef
   | TriggeredEffectDef
   | CombatRulesEffectDef
-  | StructuralHandEffectDef;
+  | StructuralHandEffectDef
+  | MirrorLeftRingEffectDef
+  | AmplifyNeighborsEffectDef;
 
 export type RuntimeEffect = {
   source: EffectSourceRef;

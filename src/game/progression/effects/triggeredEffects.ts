@@ -22,6 +22,7 @@ import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
 import { queryCircle } from "../../util/spatialHash";
 import { isEnemyInCircle } from "../../systems/sim/hitDetection";
 import { finalizeEnemyDeath } from "../../systems/enemies/finalize";
+import { stunEnemy } from "../../systems/enemies/brain";
 import {
   applyChaosHitConversion,
   applyNonPhysicalHitDamageSuppression,
@@ -41,6 +42,7 @@ import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/st
 
 type EnemyHitEvent = Extract<GameEvent, { type: "ENEMY_HIT" }>;
 type EnemyKilledEvent = Extract<GameEvent, { type: "ENEMY_KILLED" }>;
+type PlayerHitEvent = Extract<GameEvent, { type: "PLAYER_HIT" }>;
 type PlayerCombatEvent = EnemyHitEvent | EnemyKilledEvent;
 
 type TypedDamageBundle = {
@@ -93,6 +95,14 @@ function scaleTriggeredAction(
       return { ...action, radius: scaleValue(action.radius, increasedEffectScalar) };
     case "APPLY_IGNITE_FROM_HIT":
       return { ...action, damageScalar: scaleValue(action.damageScalar, increasedEffectScalar) };
+    case "CHAIN_HIT":
+      return {
+        ...action,
+        jumpRangePx: scaleValue(action.jumpRangePx, increasedEffectScalar),
+        damageScalar: scaleValue(action.damageScalar, increasedEffectScalar),
+      };
+    case "STUN_EXPLOSION":
+      return { ...action, radius: scaleValue(action.radius, increasedEffectScalar) };
     default:
       return action;
   }
@@ -112,6 +122,10 @@ function playerCombatEventMatchesTrigger(triggerKey: TriggerKey, event: GameEven
     return event.type === "ENEMY_KILLED" && isBaseCombatEvent;
   }
   return false;
+}
+
+function isPlayerHitEvent(triggerKey: TriggerKey, event: GameEvent): boolean {
+  return triggerKey === "ON_PLAYER_HIT" && event.type === "PLAYER_HIT";
 }
 
 function eventTypedDamage(event: PlayerCombatEvent): TypedDamageBundle {
@@ -184,6 +198,40 @@ function nearestEnemiesInRange(
     return left.enemyIndex - right.enemyIndex;
   });
   return candidates.slice(0, limit).map((candidate) => candidate.enemyIndex);
+}
+
+function nearestChainEnemyInRange(
+  world: World,
+  centerX: number,
+  centerY: number,
+  rangePx: number,
+  excludedEnemyIndices: ReadonlySet<number>,
+): number {
+  if (!(rangePx > 0)) return -1;
+  const nearby = queryCircle(world.enemySpatialHash, centerX, centerY, rangePx + 50);
+  const seen = new Set<number>();
+  let bestEnemyIndex = -1;
+  let bestDist2 = Number.POSITIVE_INFINITY;
+
+  for (let i = 0; i < nearby.length; i++) {
+    const enemyIndex = nearby[i];
+    if (seen.has(enemyIndex)) continue;
+    seen.add(enemyIndex);
+    if (excludedEnemyIndices.has(enemyIndex)) continue;
+    if (!world.eAlive[enemyIndex]) continue;
+    if (!isEnemyInCircle(world, enemyIndex, centerX, centerY, rangePx)) continue;
+
+    const enemyAim = getEnemyAimWorld(world, enemyIndex);
+    const dx = enemyAim.x - centerX;
+    const dy = enemyAim.y - centerY;
+    const dist2 = dx * dx + dy * dy;
+    if (dist2 < bestDist2 || (dist2 === bestDist2 && (bestEnemyIndex < 0 || enemyIndex < bestEnemyIndex))) {
+      bestEnemyIndex = enemyIndex;
+      bestDist2 = dist2;
+    }
+  }
+
+  return bestEnemyIndex;
 }
 
 function resolveTargetEnemyIndex(
@@ -492,6 +540,81 @@ function applyIgniteFromHit(
   });
 }
 
+function applyTriggeredChainHit(
+  world: World,
+  runtimeEffect: RuntimeEffect,
+  event: PlayerCombatEvent,
+  action: Extract<TriggeredEffectActionDef, { kind: "CHAIN_HIT" }>,
+  rules: CombatRulesSnapshot,
+  ailmentProfile: TriggeredAilmentProfile,
+  dotStats: ReturnType<typeof resolveDotStats>,
+): void {
+  const maxTargets = Math.max(0, Math.floor(action.maxTargets));
+  const jumpRangePx = Math.max(0, action.jumpRangePx);
+  if (maxTargets <= 0 || jumpRangePx <= 0) return;
+
+  const damage = resolveTriggerDamageBundle(event, action.damageType, action.damageScalar, rules);
+  if (!(damage.total > 0)) return;
+
+  const meta = makePlayerTriggerHitMeta(runtimeEffect.source.ringDefId ?? runtimeEffect.source.id, {
+    category: "HIT",
+    instigatorId: "player",
+    isProcDamage: true,
+  });
+  const excluded = new Set<number>();
+  if (event.enemyIndex >= 0) excluded.add(event.enemyIndex);
+
+  let centerX = event.x;
+  let centerY = event.y;
+  if (event.enemyIndex >= 0 && world.eAlive[event.enemyIndex]) {
+    const originAim = getEnemyAimWorld(world, event.enemyIndex);
+    centerX = originAim.x;
+    centerY = originAim.y;
+  }
+
+  for (let hitCount = 0; hitCount < maxTargets; hitCount++) {
+    const enemyIndex = nearestChainEnemyInRange(world, centerX, centerY, jumpRangePx, excluded);
+    if (enemyIndex < 0) return;
+    excluded.add(enemyIndex);
+
+    applyTriggeredAilments(world, enemyIndex, damage, ailmentProfile, rules, dotStats);
+
+    world.eHp[enemyIndex] -= damage.total;
+    const enemyAim = getEnemyAimWorld(world, enemyIndex);
+    emitEvent(world, {
+      type: "ENEMY_HIT",
+      enemyIndex,
+      damage: damage.total,
+      dmgPhys: damage.physical,
+      dmgFire: damage.fire,
+      dmgChaos: damage.chaos,
+      x: enemyAim.x,
+      y: enemyAim.y,
+      isCrit: false,
+      damageMeta: meta,
+      source: "OTHER",
+    });
+    emitEvent(world, { type: "VFX", id: "LIGHTNING_CHAIN", x: enemyAim.x, y: enemyAim.y, radius: 24 });
+
+    if (world.eHp[enemyIndex] <= 0) {
+      finalizeEnemyDeath(world, enemyIndex, {
+        damageMeta: meta,
+        source: "OTHER",
+        damage: damage.total,
+        dmgPhys: damage.physical,
+        dmgFire: damage.fire,
+        dmgChaos: damage.chaos,
+        isCrit: false,
+        x: enemyAim.x,
+        y: enemyAim.y,
+      });
+    }
+
+    centerX = enemyAim.x;
+    centerY = enemyAim.y;
+  }
+}
+
 function applyTriggeredAction(
   world: World,
   action: TriggeredEffectActionDef,
@@ -526,6 +649,21 @@ function applyTriggeredAction(
         applyIgniteFromHit(world, event, action.damageScalar, dotStats);
       }
       return;
+    case "CHAIN_HIT":
+      applyTriggeredChainHit(world, runtimeEffect, event, action, rules, ailmentProfile, dotStats);
+      return;
+    case "STUN_EXPLOSION": {
+      const playerPos = getPlayerAimWorld(world);
+      const nearby = queryCircle(world.enemySpatialHash, playerPos.x, playerPos.y, action.radius + 50);
+      for (const e of nearby) {
+        if (!world.eAlive[e]) continue;
+        if (!isEnemyInCircle(world, e, playerPos.x, playerPos.y, action.radius)) continue;
+        stunEnemy(world, e, action.stunDurationSec);
+      }
+      emitEvent(world, { type: "VFX", id: "EXPLOSION", x: playerPos.x, y: playerPos.y, radius: action.radius });
+      emitEvent(world, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.4 });
+      return;
+    }
   }
 }
 
@@ -560,6 +698,19 @@ export function processProgressionTriggeredEffects(world: any): void {
 
     for (let index = 0; index < eventCount; index++) {
       const event = world.events[index] as GameEvent;
+
+      // ON_PLAYER_HIT triggers use a separate path (no enemy-centric event data)
+      if (isPlayerHitEvent(effect.triggerKey, event)) {
+        if (scaledProcChance < 1 && !shouldProc(world, scaledProcChance, rules.retryFailedTriggerProcsOnce)) {
+          continue;
+        }
+        applyTriggeredAction(world, action, runtimeEffect, event as any, rules, ailmentProfile, dotStats);
+        if (rules.doubleTriggers) {
+          applyTriggeredAction(world, action, runtimeEffect, event as any, rules, ailmentProfile, dotStats);
+        }
+        continue;
+      }
+
       if (!playerCombatEventMatchesTrigger(effect.triggerKey, event)) continue;
       if (scaledProcChance < 1 && !shouldProc(world, scaledProcChance, rules.retryFailedTriggerProcsOnce)) {
         continue;

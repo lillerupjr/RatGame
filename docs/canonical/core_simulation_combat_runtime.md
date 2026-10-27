@@ -13,6 +13,11 @@ Own the `world.state === "RUN"` gameplay execution path: input, time scaling, mo
 - Projectile spawn/runtime/lifecycle: `src/game/factories/projectileFactory.ts`, `projectiles.ts`, `projectileLifecycle.ts`
 - Immediate hit/contact damage/finalization: `collisions.ts`, `hitDetection.ts`, `playerArmor.ts`, `src/game/systems/enemies/finalize.ts`
 - Zones/delayed explosions/DOT/fission/momentum/pickups: `zoneFactory.ts`, `zones.ts`, `delayedExplosions.ts`, `src/game/combat/dot/dotTickSystem.ts`, `momentum.ts`, `fission.ts`, `src/game/systems/progression/pickups.ts`, `pickupHandlers.ts`
+- Poison trail zones: `src/game/systems/sim/poisonTrail.ts` — periodic trail zone spawning and poison-stack application
+- Laser executor: `src/game/systems/sim/laserExecutor.ts` — periodic low-life enemy execution scan
+- Next-shot empower: `src/game/systems/sim/empowerSystem.ts` — timed and kill-triggered next-shot damage empowerment
+- Crit move speed buff: `src/game/systems/sim/critMoveSpeedBuff.ts` — temporary movement speed buff on player crit
+- Living bomb: `src/game/systems/sim/livingBomb.ts` — periodic enemy mark, speed buff, and death explosion
 - Event emission/clearing: `src/engine/world/world.ts`, `src/game/events.ts`
 
 ## Non-scope
@@ -47,6 +52,10 @@ Own the `world.state === "RUN"` gameplay execution path: input, time scaling, mo
 - `src/game/systems/sim/fission.ts`
 - `src/game/systems/progression/pickups.ts`
 - `src/game/systems/sim/pickupHandlers.ts`
+- `src/game/systems/sim/poisonTrail.ts`
+- `src/game/systems/sim/laserExecutor.ts`
+- `src/game/systems/sim/empowerSystem.ts`
+- `src/game/systems/sim/critMoveSpeedBuff.ts`
 - `src/engine/world/world.ts`
 - `src/game/events.ts`
 
@@ -58,9 +67,10 @@ Own the `world.state === "RUN"` gameplay execution path: input, time scaling, mo
 4. **Player Combat**: `combatSystem(...)` resolves current weapon/loadout, derived multipliers, and aim. Projectile mode calls `spawnProjectile(...)` with burst/spread/pierce/crit/ailment/target-lock payloads. Beam mode writes clamped beam state via `resolveClampedBeamGeometry(...)`; beam damage is fixed-tick.
 5. **Projectiles**: `projectilesSystem(...)` owns TTL, movement, homing/arrival, bounce/wall interaction, range, orbital behavior, anchor/Z sync, and `despawnProjectile(...)` hit VFX. Missile arrival explosions and spark retargeting happen before collision resolution.
 6. **Immediate Hits / Contact**: `collisionsSystem(...)` builds/queries enemy spatial hash and resolves projectile-enemy, projectile-player, and player-enemy contact hits with crit packets, ailment application, armor, bounce/pierce, explosion zones, DPS samples, and height-aware validation. Lethal outcomes call `finalizeEnemyDeath(...)`.
-7. **Secondary Sidecars**: `fissionSystem(...)` handles projectile-projectile fission. `zonesSystem(...)` handles zone TTL, follow-player anchors, fire VFX, delayed explosions. `dotTickSystem(...)` accumulates `world.dotTickAcc` and fixed-ticks `tickAilmentsOnce(...)`, `tickZonesOnce(...)`, and `tickBeamContactsOnce(...)`.
-8. **Momentum / Events**: immediate hits update momentum; `processMomentumEventQueue(...)` later consumes the separate `world.eventQueue`. Public events use `emitEvent(...)` into `world.events`: `ENEMY_HIT`, `ENEMY_KILLED`, `PLAYER_HIT`, `SFX`, `VFX`.
-9. **Pickups / End of Frame**: `pickupsSystem(...)` moves vacuum/magnet pickups and syncs anchors. Chest side effects use `handleChestPickup(...)`, setting `world.chestOpenRequested` and pickup SFX. `processCombatTextFromEvents(...)` consumes hit events late; `clearEvents(world)` runs only after all frame consumers.
+7. **Combat Rule Sidecars**: `tickPoisonTrail(...)` spawns `ZONE_KIND.POISON` zones behind the player at a fixed drop interval. `tickLaserExecutor(...)` periodically scans for low-life enemies within range and kills them. `tickNextShotEmpower(...)` manages timed and kill-triggered next-shot damage empowerment. `tickCritMoveSpeedBuff(...)` grants temporary movement speed on player crit. `tickLivingBomb(...)` periodically marks the nearest enemy with Living Bomb; marked enemies gain speed and explode on death for fire damage. All run after collisions and before `zonesSystem(...)`.
+8. **Secondary Sidecars**: `fissionSystem(...)` handles projectile-projectile fission. `zonesSystem(...)` handles zone TTL, follow-player anchors, fire VFX, delayed explosions. `dotTickSystem(...)` accumulates `world.dotTickAcc` and fixed-ticks `tickAilmentsOnce(...)`, `tickZonesOnce(...)`, `tickPoisonZones(...)`, and `tickBeamContactsOnce(...)`.
+9. **Momentum / Events**: immediate hits update momentum; `processMomentumEventQueue(...)` later consumes the separate `world.eventQueue`. Public events use `emitEvent(...)` into `world.events`: `ENEMY_HIT`, `ENEMY_KILLED`, `PLAYER_HIT`, `SFX`, `VFX`.
+10. **Pickups / End of Frame**: `pickupsSystem(...)` moves vacuum/magnet pickups and syncs anchors. Chest side effects use `handleChestPickup(...)`, setting `world.chestOpenRequested` and pickup SFX. `processCombatTextFromEvents(...)` consumes hit events late; `clearEvents(world)` runs only after all frame consumers.
 
 ## Invariants
 
@@ -108,6 +118,27 @@ Own the `world.state === "RUN"` gameplay execution path: input, time scaling, mo
 - Hazards/area damage: `spawnZone(...)`, `zonesSystem(...)`, `tickZonesOnce(...)`
 - Momentum/armor side effects: `momentum.ts`, `playerArmor.ts`
 - Pickup motion/interactions: `pickups.ts`, `pickupHandlers.ts`
+
+## Combat Rule Consumers
+
+Combat rules from ring progression are consumed by these runtime systems:
+
+| Rule | Consumer | Behavior |
+|---|---|---|
+| `BURNING_ENEMIES_MOVE_SPEED_REDUCED` | `movement.ts` | Reduces chase speed of enemies with active ignite stacks. |
+| `POISONED_ENEMIES_DAMAGE_REDUCED` | `collisions.ts` | Reduces contact damage from enemies with active poison stacks. |
+| `POISONED_ENEMIES_EXPLODE_ON_DEATH` | `finalize.ts` | Triggers AoE chaos explosion on death of poisoned enemies, dealing a fraction of their max life. |
+| `POISON_TRAIL` | `poisonTrail.ts` | Spawns `ZONE_KIND.POISON` zones behind player; zones apply poison stacks to enemies via `tickPoisonZones`. |
+| `LASER_EXECUTOR` | `laserExecutor.ts` | Periodic scan-and-kill of enemies below HP threshold within range of the player. |
+| `PHYSICAL_HIT_STUN_CHANCE` | `collisions.ts` | Chance to stun enemy on physical projectile hit; stun halts AI behavior and movement. |
+| `TIMED_NEXT_SHOT_EMPOWER` | `empowerSystem.ts` → `combat.ts` | Periodic charge that empowers next player shot with increased physical damage. |
+| `KILL_EMPOWER_NEXT_SHOT` | `empowerSystem.ts` → `combat.ts` | Kill event empowers next player shot with increased all-type damage. |
+| `CRIT_MOVE_SPEED_BUFF` | `critMoveSpeedBuff.ts` → `derivedStats.ts` | Crit event grants temporary movement speed increase as a post-pipeline multiplier. |
+| `LIVING_BOMB` | `livingBomb.ts` → `movement.ts`, `finalize.ts` | Periodically marks nearest enemy; marked enemy gains speed increase (`movement.ts`), explodes on death for fire AoE (`finalize.ts`). |
+
+Enemy stun state (`stunLeftSec`) lives in `EnemyBrainState` (`brain.ts`). Stunned enemies skip all behavior transitions in `behavior.ts` and movement in `movement.ts`. Stun duration is consumed per-frame and does not stack (uses max of current and new duration).
+
+Poison trail zones use `ZONE_KIND.POISON` (value 6) and do not deal direct zone damage. Instead, `tickPoisonZones()` pushes poison ailment stacks onto enemies in range, and the existing ailment DoT system handles the actual damage over time.
 
 ## Failure Modes
 

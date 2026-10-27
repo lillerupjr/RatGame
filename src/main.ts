@@ -38,6 +38,7 @@ import { installStandaloneViewportFix } from "./game/app/viewportSizing";
 import { buildPaletteSnapshotArtifactFromCanvas } from "./game/paletteLab/snapshotThumbnail";
 import { getPaletteSnapshotRecord, savePaletteSnapshotArtifact } from "./game/paletteLab/snapshotStorage";
 import { mountSnapshotViewerPalettePanel } from "./ui/paletteLab/snapshotViewerPalettePanel";
+import { mountBoonSelectionMenu } from "./ui/boons/boonSelectionMenu";
 import {
   attachWebGLWorldSurface,
   getRenderableWebGLWorldSurface,
@@ -223,6 +224,24 @@ async function bootstrap() {
       game.openPaletteSnapshotRecord(snapshot);
     },
   });
+  // ── Boon selection overlay (DOM) ──
+  const boonSelectionRoot = document.createElement("div");
+  boonSelectionRoot.id = "boonSelection";
+  boonSelectionRoot.hidden = true;
+  document.body.appendChild(boonSelectionRoot);
+  let pendingBoonInstanceId: string | null = null;
+
+  const boonMenu = mountBoonSelectionMenu({
+    root: boonSelectionRoot,
+    onPick: (nodeId) => {
+      if (!pendingBoonInstanceId) return;
+      game.handsScreenApplyBoon(pendingBoonInstanceId, nodeId);
+      pendingBoonInstanceId = null;
+      boonMenu.render(null);
+      handsScreen?.refresh();
+    },
+  });
+
   // ── Hands screen (PixiJS) — lazy-initialized on first open ──
   let handsScreen: HandsScreenController | null = null;
   let handsScreenMounting = false;
@@ -246,6 +265,14 @@ async function bootstrap() {
           game.handsScreenUnequipSlot(slotId);
         },
         onApplyToken: (instanceId, tokenType) => {
+          if (tokenType === "LEVEL_UP") {
+            const ctx = game.handsScreenRequestBoonOptions(instanceId);
+            if (ctx && ctx.options.length > 0) {
+              pendingBoonInstanceId = instanceId;
+              boonMenu.render({ active: true, ...ctx });
+              return;
+            }
+          }
           game.handsScreenApplyToken(instanceId, tokenType);
         },
         computeStatsPreview: (slotId, ringDefId) => {
@@ -348,6 +375,7 @@ async function bootstrap() {
       const isVendorOpen = !!vendorRoot && !vendorRoot.hidden;
       const isProgressionRewardOpen = !!progressionRewardRoot && !progressionRewardRoot.hidden;
       const isHandsScreenOpen = game.isHandsScreenOpen() || !!handsScreen?.isVisible();
+      const isBoonOverlayOpen = pendingBoonInstanceId !== null;
       const isAnyBlockingOverlayOpen =
         isMapOpen
         || isPauseOpen
@@ -355,7 +383,8 @@ async function bootstrap() {
         || isDialogOpen
         || isVendorOpen
         || isProgressionRewardOpen
-        || isHandsScreenOpen;
+        || isHandsScreenOpen
+        || isBoonOverlayOpen;
 
       game.setMobileControlsEnabled(runState === RunState.PLAYING && !isAnyBlockingOverlayOpen);
       refs.welcomeScreen.hidden = true;
@@ -379,6 +408,13 @@ async function bootstrap() {
       if (game.isHandsScreenOpen() && handsScreen && !handsScreen.isVisible()) {
         handsScreen.show(w, game.getHandsScreenPendingRingDefId());
         appStateController.setRunState(RunState.PAUSED);
+      } else if (game.isHandsScreenOpen() && !handsScreen && !handsScreenMounting) {
+        void ensureHandsScreen().then((hs) => {
+          if (hs && game.isHandsScreenOpen()) {
+            hs.show(game.getWorld(), game.getHandsScreenPendingRingDefId());
+            appStateController.setRunState(RunState.PAUSED);
+          }
+        });
       } else if (!game.isHandsScreenOpen() && handsScreen?.isVisible()) {
         handsScreen.hide();
         appStateController.setRunState(RunState.PLAYING);
@@ -641,6 +677,12 @@ async function bootstrap() {
 
     if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
       ev.preventDefault();
+      // Boon overlay takes precedence over everything
+      if (pendingBoonInstanceId !== null) {
+        pendingBoonInstanceId = null;
+        boonMenu.render(null);
+        return;
+      }
       // Pause menu over hands screen: close pause menu only, stay on hands screen
       if (wasPausedVisible && handsScreen?.isVisible()) {
         pauseMenu.setVisible(false);

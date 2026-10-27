@@ -24,6 +24,7 @@ export type EnemyBrainState = {
   leapDirY: number;
   leapTimeLeftSec: number;
   leapHitDone: boolean;
+  stunLeftSec: number;
 };
 
 function defaultEnemyState(archetype: EnemyDefinition): EnemyBehaviorState {
@@ -40,6 +41,7 @@ function createDefaultBrainState(archetype: EnemyDefinition): EnemyBrainState {
     leapDirY: 0,
     leapTimeLeftSec: 0,
     leapHitDone: false,
+    stunLeftSec: 0,
   };
 }
 
@@ -56,6 +58,7 @@ function normalizeEnemyBrainState(brain: EnemyBrainState, archetype: EnemyDefini
   brain.leapDirY = Number.isFinite(brain.leapDirY) ? brain.leapDirY : 0;
   brain.leapTimeLeftSec = Number.isFinite(brain.leapTimeLeftSec) ? Math.max(0, brain.leapTimeLeftSec) : 0;
   brain.leapHitDone = !!brain.leapHitDone;
+  brain.stunLeftSec = Number.isFinite(brain.stunLeftSec) ? Math.max(0, brain.stunLeftSec) : 0;
   return brain;
 }
 
@@ -88,4 +91,10 @@ export function clearEnemyTransientState(brain: EnemyBrainState): void {
   brain.leapDirY = 0;
   brain.leapTimeLeftSec = 0;
   brain.leapHitDone = false;
+  brain.stunLeftSec = 0;
+}
+
+export function stunEnemy(w: World, enemyIndex: number, durationSec: number): void {
+  const brain = ensureEnemyBrain(w, enemyIndex);
+  brain.stunLeftSec = Math.max(brain.stunLeftSec, durationSec);
 }
