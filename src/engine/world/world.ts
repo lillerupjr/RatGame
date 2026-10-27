@@ -86,56 +86,6 @@ export type NpcActor = {
   castsShadow?: boolean;
 };
 
-export type NeutralAnimatedMob = {
-  id: string;
-  kind: "PIGEON";
-  pos: { wx: number; wy: number; wzOffset: number };
-  anim: {
-    frameIndex: number;
-    fps: number;
-    loop: boolean;
-    elapsed: number;
-    clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
-  };
-  behavior: {
-    state: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
-    stateTimerSec: number;
-    targetTileX: number;
-    targetTileY: number;
-    lastPlayerDist2: number;
-    lastTargetDist2: number;
-    rngState?: number;
-  };
-  params: {
-    walkTriggerTiles: number;
-    safeDistanceTiles: number;
-    targetMinDistanceTiles: number;
-    targetMaxDistanceTiles: number;
-    targetAngleJitterDeg: number;
-    flySpeedTilesPerSec: number;
-    targetReachedThresholdTiles: number;
-    flyHeight: number;
-    takeoffTimeSec: number;
-    landTimeSec: number;
-    epsilon: number;
-  };
-  spriteFrames: HTMLImageElement[];
-  render: {
-    anchorX: number;
-    anchorY: number;
-    scale: number;
-    flipX: boolean;
-    screenDir: Dir8;
-  };
-  debug: {
-    frameLogsRemaining: number;
-    renderLogged: boolean;
-  };
-  shadowRadiusX?: number;
-  shadowRadiusY?: number;
-  castsShadow?: boolean;
-};
-
 export type WorldTimeState = {
   dtReal: number;
   dtSim: number;
@@ -335,7 +285,6 @@ export type World = {
   pendingAdvanceToNextFloor: boolean;
   progression: RingProgressionState;
   npcs: NpcActor[];
-  neutralMobs: NeutralAnimatedMob[];
 
   // -------------------------
   // Items + progression effects
@@ -763,7 +712,6 @@ export function createWorld(args: CreateWorldArgs): World {
     pendingAdvanceToNextFloor: false,
     progression: createInitialRingProgressionState(),
     npcs: [],
-    neutralMobs: [],
 
     // Items + progression effects
     items: [],

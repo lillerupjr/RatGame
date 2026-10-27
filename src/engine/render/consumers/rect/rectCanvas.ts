@@ -72,7 +72,6 @@ export function drawDynamicRectPieceCanvas(
   if (
     piece.enemyIndex !== undefined
     || piece.npcIndex !== undefined
-    || piece.neutralMobIndex !== undefined
     || piece.feet
   ) {
     const feet = piece.feet as { screenX?: number; screenY?: number } | undefined;

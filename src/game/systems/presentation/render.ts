@@ -24,9 +24,6 @@ import {
   vendorNpcSpritesReady,
 } from "../../../engine/render/sprites/vendorSprites";
 import {
-  preloadNeutralMobSprites,
-} from "../../../engine/render/sprites/neutralSprites";
-import {
   heightAtWorld,
   walkInfo,
   surfacesAtXY,
@@ -70,7 +67,6 @@ import {
 } from "./renderLighting";
 import {
   resolveEnemyShadowFootOffset,
-  resolveNeutralShadowFootOffset,
   resolvePlayerShadowFootOffset,
   resolveProjectileShadowFootOffset,
   resolveVendorShadowFootOffset,
@@ -313,11 +309,6 @@ export async function renderSystem(
   if (!(w as any)._vendorSpritesPreloaded) {
     (w as any)._vendorSpritesPreloaded = true;
     preloadVendorNpcSprites();
-  }
-
-  if (!(w as any)._neutralMobSpritesPreloaded) {
-    (w as any)._neutralMobSpritesPreloaded = true;
-    preloadNeutralMobSprites();
   }
 
   // one-time render sprite preload
@@ -968,8 +959,7 @@ export async function renderSystem(
     getVendorNpcSpriteFrame,
     resolveVendorShadowFootOffset,
     snapPx,
-    resolveNeutralShadowFootOffset,
-    playerSpritesReady,
+      playerSpritesReady,
     getPlayerSpriteFrame,
     getPlayerSkin,
     resolvePlayerShadowFootOffset,

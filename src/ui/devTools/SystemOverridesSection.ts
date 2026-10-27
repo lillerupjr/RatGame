@@ -18,7 +18,6 @@ import {
   DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC,
   DEFAULT_HOSTILE_SPAWN_T120_LIVE_THREAT_CAP,
   DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC,
-  NEUTRAL_BIRD_FORCE_STATES,
   PALETTE_REMAP_WEIGHT_OPTIONS,
   resolveEffectiveWorldAtlasMode,
 } from "../../settings/systemOverrides";
@@ -58,7 +57,6 @@ export function mountSystemOverridesSection(
   const renderingGrid = createSubsectionGrid(section, "Rendering Overrides");
   const lightingGrid = createSubsectionGrid(section, "Lighting / Palette Overrides");
   const gameplayGrid = createSubsectionGrid(section, "Gameplay Overrides");
-  const aiGrid = createSubsectionGrid(section, "AI Overrides");
   const hostileSpawnGrid = createSubsectionGrid(section, "Hostile Spawn Overrides");
 
   const entityShadowsDisable = createToggleRow(renderingGrid, "Disable Entity Shadows", (checked) => {
@@ -128,6 +126,9 @@ export function mountSystemOverridesSection(
   });
   const mapOverlaysDisabled = createToggleRow(renderingGrid, "Disable Map Overlays", (checked) => {
     applySystemPatch({ mapOverlaysDisabled: checked });
+  });
+  const structuresDisabled = createToggleRow(renderingGrid, "Disable Structures (next map load)", (checked) => {
+    applySystemPatch({ structuresDisabled: checked });
   });
   const rampFaces = createToggleRow(renderingGrid, "Show Ramp Faces", (checked) => {
     applySystemPatch({ rampFaces: checked });
@@ -222,23 +223,6 @@ export function mountSystemOverridesSection(
     applySystemPatch({ forceSpawnOverride: checked });
   });
 
-  const neutralBirdDisabled = createToggleRow(aiGrid, "Disable Neutral Bird AI", (checked) => {
-    applySystemPatch({ neutralBirdDisabled: checked });
-  });
-  const neutralBirdDisableTransitions = createToggleRow(aiGrid, "Disable Bird Transitions", (checked) => {
-    applySystemPatch({ neutralBirdDisableTransitions: checked });
-  });
-  const neutralBirdForceState = createSelectRow(
-    aiGrid,
-    "Bird Force State",
-    NEUTRAL_BIRD_FORCE_STATES,
-    (value) => value,
-    (value) => applySystemPatch({ neutralBirdForceState: value }),
-  );
-  const neutralBirdDebugRepickTarget = createToggleRow(aiGrid, "Bird Repick Target Debug", (checked) => {
-    applySystemPatch({ neutralBirdDebugRepickTarget: checked });
-  });
-
   const hostileSpawnT0PowerPerSec = createSliderRow(hostileSpawnGrid, "t0 Power/sec", 0, 5, 0.05, (value) => {
     applySystemPatch({ hostileSpawnT0PowerPerSec: value });
   });
@@ -288,7 +272,6 @@ export function mountSystemOverridesSection(
   applyColumnMajorGridOrder(renderingGrid, 3);
   applyColumnMajorGridOrder(lightingGrid, 3);
   applyColumnMajorGridOrder(gameplayGrid, 3);
-  applyColumnMajorGridOrder(aiGrid, 3);
   applyColumnMajorGridOrder(hostileSpawnGrid, 3);
 
   const rebuildPaletteOptions = (groupRaw: string, selectedIdRaw: string): string => {
@@ -370,6 +353,7 @@ export function mountSystemOverridesSection(
       }
       disableVisualCompiledCutoutCache.checked = system.disableVisualCompiledCutoutCache;
       mapOverlaysDisabled.checked = system.mapOverlaysDisabled;
+      structuresDisabled.checked = system.structuresDisabled;
       rampFaces.checked = system.rampFaces;
       heightmapShadowsEnabled.checked = system.heightmapShadowsEnabled;
 
@@ -395,10 +379,6 @@ export function mountSystemOverridesSection(
       waterFlowRate.value.textContent = formatX(system.waterFlowRate);
       forceSpawnOverride.checked = system.forceSpawnOverride;
 
-      neutralBirdDisabled.checked = system.neutralBirdDisabled;
-      neutralBirdDisableTransitions.checked = system.neutralBirdDisableTransitions;
-      neutralBirdForceState.value = system.neutralBirdForceState;
-      neutralBirdDebugRepickTarget.checked = system.neutralBirdDebugRepickTarget;
 
       hostileSpawnT0PowerPerSec.input.value = `${system.hostileSpawnT0PowerPerSec}`;
       hostileSpawnT0PowerPerSec.value.textContent = formatScalar(system.hostileSpawnT0PowerPerSec);

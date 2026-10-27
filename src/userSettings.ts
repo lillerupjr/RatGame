@@ -112,14 +112,6 @@ export type AudioPreferenceSettings = {
   sfxMuted: boolean;
 };
 
-export type NeutralBirdAIDebugSettings = {
-  disabled: boolean;
-  forceState: "NONE" | "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
-  disableTransitions: boolean;
-  drawDebug: boolean;
-  debugRepickTarget: boolean;
-};
-
 export type DebugSettings = {
   renderBackend: RenderBackendMode;
   grid: boolean;
@@ -170,7 +162,6 @@ export type DebugSettings = {
   heightmapShadowStepSize: number;
   heightmapShadowMaxSteps: number;
   heightmapShadowIntensity: number;
-  neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
     showZoneBounds: boolean;
   };
@@ -186,7 +177,6 @@ export type UserSettings = {
 
 export type UserSettingsPatch = {
   debug?: Partial<DebugSettings> & {
-    neutralBirdAI?: Partial<NeutralBirdAIDebugSettings> & { enabled?: boolean };
     objectives?: Partial<DebugSettings["objectives"]>;
   };
   game?: Partial<GameSettings>;
@@ -251,13 +241,6 @@ function toLegacySettings(): UserSettings {
       heightmapShadowStepSize: settings.debug.heightmapShadowStepSize,
       heightmapShadowMaxSteps: settings.debug.heightmapShadowMaxSteps,
       heightmapShadowIntensity: settings.debug.heightmapShadowIntensity,
-      neutralBirdAI: {
-        disabled: settings.system.neutralBirdDisabled,
-        forceState: settings.system.neutralBirdForceState,
-        disableTransitions: settings.system.neutralBirdDisableTransitions,
-        drawDebug: settings.debug.neutralBirdDrawDebug,
-        debugRepickTarget: settings.system.neutralBirdDebugRepickTarget,
-      },
       objectives: {
         showZoneBounds: settings.debug.objectivesShowZoneBounds,
       },
@@ -509,20 +492,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.delveActShowCombatSubtypes !== undefined) {
       debugPatch.delveActShowCombatSubtypes = debugAny.delveActShowCombatSubtypes;
-    }
-
-    const neutralBirdPatch = { ...(debugAny.neutralBirdAI ?? {}) };
-    if (typeof neutralBirdPatch.enabled === "boolean" && typeof neutralBirdPatch.disabled !== "boolean") {
-      neutralBirdPatch.disabled = !neutralBirdPatch.enabled;
-    }
-    if (neutralBirdPatch.disabled !== undefined) systemPatch.neutralBirdDisabled = neutralBirdPatch.disabled;
-    if (neutralBirdPatch.forceState !== undefined) systemPatch.neutralBirdForceState = neutralBirdPatch.forceState;
-    if (neutralBirdPatch.disableTransitions !== undefined) {
-      systemPatch.neutralBirdDisableTransitions = neutralBirdPatch.disableTransitions;
-    }
-    if (neutralBirdPatch.drawDebug !== undefined) debugPatch.neutralBirdDrawDebug = neutralBirdPatch.drawDebug;
-    if (neutralBirdPatch.debugRepickTarget !== undefined) {
-      systemPatch.neutralBirdDebugRepickTarget = neutralBirdPatch.debugRepickTarget;
     }
   }
 

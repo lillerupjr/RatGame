@@ -130,6 +130,12 @@ const DEFAULT_EXTRA_EDGE_CHANCE = 0.35;
 const DEFAULT_RETRY_LIMIT = 12;
 
 const ZONE_IDS: StageId[] = ["DOCKS", "SEWERS", "CHINATOWN"];
+const COMBAT_SUBTYPE_RUNTIME_ENABLED: Record<DelveCombatSubtype, boolean> = {
+  SURVIVE_TIMER: true,
+  POE_MAP_CLEAR: false,
+  ZONE_TRIAL: false,
+};
+
 const COMBAT_SUBTYPE_POOL: Array<{ subtype: DelveCombatSubtype; weight: number }> = [
   { subtype: "SURVIVE_TIMER", weight: 55 },
   { subtype: "POE_MAP_CLEAR", weight: 25 },
@@ -551,11 +557,12 @@ function pickMapId(rng: RNG): MapId {
 }
 
 function weightedPickCombatSubtype(rng: RNG): DelveCombatSubtype {
-  const totalWeight = COMBAT_SUBTYPE_POOL.reduce((sum, item) => sum + item.weight, 0);
+  const pool = COMBAT_SUBTYPE_POOL.filter((item) => COMBAT_SUBTYPE_RUNTIME_ENABLED[item.subtype]);
+  const totalWeight = pool.reduce((sum, item) => sum + item.weight, 0);
   let roll = rng.int(1, totalWeight);
-  for (let i = 0; i < COMBAT_SUBTYPE_POOL.length; i++) {
-    roll -= COMBAT_SUBTYPE_POOL[i].weight;
-    if (roll <= 0) return COMBAT_SUBTYPE_POOL[i].subtype;
+  for (let i = 0; i < pool.length; i++) {
+    roll -= pool[i].weight;
+    if (roll <= 0) return pool[i].subtype;
   }
   return "SURVIVE_TIMER";
 }

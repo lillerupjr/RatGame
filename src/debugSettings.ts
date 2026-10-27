@@ -1,22 +1,14 @@
-import {
-  NEUTRAL_BIRD_FORCE_STATES,
-  normalizePaletteRemapWeightPercent,
-} from "./settings/systemOverrides";
+import { normalizePaletteRemapWeightPercent } from "./settings/systemOverrides";
 import { DEFAULT_SETTINGS, type DebugSettings } from "./userSettings";
 
 export type {
   DebugSettings,
-  NeutralBirdAIDebugSettings,
   UserSettings,
 } from "./userSettings";
 
-export type NeutralBirdForceState = (typeof NEUTRAL_BIRD_FORCE_STATES)[number];
 export type ObjectiveDebugSettings = { showZoneBounds: boolean };
 
-export {
-  NEUTRAL_BIRD_FORCE_STATES,
-  normalizePaletteRemapWeightPercent,
-};
+export { normalizePaletteRemapWeightPercent };
 
 export const PALETTE_REMAP_WEIGHT_OPTIONS = [0, 25, 50, 75, 100] as const;
 export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number];
@@ -47,7 +39,6 @@ export type BooleanDebugSettingKey = Exclude<
   | "heightmapShadowStepSize"
   | "heightmapShadowMaxSteps"
   | "heightmapShadowIntensity"
-  | "neutralBirdAI"
   | "objectives"
 >;
 
@@ -112,14 +103,6 @@ export function makeAllDebugOffSettings(): DebugSettings {
     shadowSunDayCycleSpeedMultiplier: 1,
     shadowSunStepsPerDay: 96,
     staticLightCycleOverride: DEFAULT_DEBUG_SETTINGS.staticLightCycleOverride,
-    neutralBirdAI: {
-      ...DEFAULT_DEBUG_SETTINGS.neutralBirdAI,
-      disabled: false,
-      forceState: "NONE",
-      disableTransitions: false,
-      drawDebug: false,
-      debugRepickTarget: false,
-    },
     objectives: { showZoneBounds: false },
   };
 }

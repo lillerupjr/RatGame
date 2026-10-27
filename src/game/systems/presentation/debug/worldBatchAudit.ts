@@ -173,7 +173,6 @@ function describeWorldFamily(command: RenderCommand): string {
     if (
       payload.enemyIndex !== undefined
       || payload.npcIndex !== undefined
-      || payload.neutralMobIndex !== undefined
     ) {
       return "entities";
     }

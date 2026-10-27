@@ -28,7 +28,6 @@
     { "x": 14, "y": 28, "z": 0, "type": "building", "w": 3, "h": 3, "skinId": "b1_news_paper_stand",  "dir": "S" },
     { "x": 24, "y": 28, "z": 0, "type": "building", "w": 3, "h": 3, "skinId": "b1_newspaper_stand",   "dir": "S" },
     { "x": 34, "y": 28, "z": 0, "type": "building", "w": 3, "h": 3, "skinId": "b1_police_car",        "dir": "S" },
-    { "x": 44, "y": 28, "z": 0, "type": "building", "w": 3, "h": 3, "skinId": "b1_rat_hooker",        "dir": "S" },
     { "x": 54, "y": 28, "z": 0, "type": "building", "w": 2, "h": 2, "skinId": "b1_street_light",      "dir": "S" },
     { "x": 64, "y": 28, "z": 0, "type": "building", "w": 3, "h": 3, "skinId": "b1_taxi",              "dir": "S" },
 

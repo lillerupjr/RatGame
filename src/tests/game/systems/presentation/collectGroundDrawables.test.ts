@@ -23,7 +23,6 @@ describe("collectGroundDrawables", () => {
         time: 0,
         eAlive: [],
         npcs: [],
-        neutralMobs: [],
         pzVisual: 0,
         pz: 0,
       },
@@ -131,7 +130,6 @@ describe("collectGroundDrawables", () => {
         time: 0,
         eAlive: [],
         npcs: [],
-        neutralMobs: [],
         pzVisual: 0,
         pz: 0,
       },
@@ -233,7 +231,7 @@ describe("collectGroundDrawables", () => {
     const countFallback = vi.fn();
 
     collectGroundDrawables({
-      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], neutralMobs: [], pzVisual: 0, pz: 0 },
+      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], pzVisual: 0, pz: 0 },
       minSum: 0,
       maxSum: 0,
       minTy: 0,
@@ -317,7 +315,6 @@ describe("collectGroundDrawables", () => {
         time: 0,
         eAlive: [],
         npcs: [],
-        neutralMobs: [],
         pzVisual: 0,
         pz: 0,
         arenaTileEffects: [{
@@ -399,7 +396,7 @@ describe("collectGroundDrawables", () => {
     const countFallback = vi.fn();
 
     collectGroundDrawables({
-      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], neutralMobs: [], pzVisual: 0, pz: 0 },
+      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], pzVisual: 0, pz: 0 },
       minSum: 0,
       maxSum: 0,
       minTy: 0,
@@ -482,7 +479,7 @@ describe("collectGroundDrawables", () => {
     const countFallback = vi.fn();
 
     collectGroundDrawables({
-      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], neutralMobs: [], pzVisual: 0, pz: 0 },
+      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], pzVisual: 0, pz: 0 },
       minSum: 0,
       maxSum: 0,
       minTy: 0,
@@ -564,7 +561,7 @@ describe("collectGroundDrawables", () => {
     const countFallback = vi.fn();
 
     collectGroundDrawables({
-      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], neutralMobs: [], pzVisual: 0, pz: 0 },
+      w: { timeSec: 0, time: 0, eAlive: [], npcs: [], pzVisual: 0, pz: 0 },
       minSum: 0,
       maxSum: 0,
       minTy: 0,
@@ -658,7 +655,6 @@ describe("collectGroundDrawables", () => {
         time: 1.25,
         eAlive: [],
         npcs: [],
-        neutralMobs: [],
         pzVisual: 0,
         pz: 0,
         arenaTileEffects: [{

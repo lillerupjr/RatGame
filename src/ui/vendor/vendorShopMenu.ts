@@ -2,7 +2,6 @@ import {
   progressionRewardOptionView,
   type ProgressionRewardOption,
 } from "../../game/progression/rewards/progressionOffers";
-import { rewardFamilyLabel } from "../../game/progression/rewards/rewardFamilies";
 import { createTapSafeActivator } from "../interaction/tapSafeActivate";
 
 const OVERLAY_ENTRY_SHIELD_MS = 300;
@@ -60,13 +59,6 @@ export function mountVendorShopMenu(args: {
       panel.appendChild(title);
     }
 
-    let sub = panel.querySelector(".sub") as HTMLElement | null;
-    if (!sub) {
-      sub = document.createElement("div");
-      sub.className = "sub";
-      panel.appendChild(sub);
-    }
-
     let offers = panel.querySelector(".deckCardGrid") as HTMLElement | null;
     if (!offers) {
       offers = document.createElement("div");
@@ -81,16 +73,15 @@ export function mountVendorShopMenu(args: {
       panel.appendChild(actions);
     }
 
-    return { top, title, sub, offers, actions };
+    return { top, title, offers, actions };
   };
 
   const renderOffers = (): void => {
     if (!currentState || !currentState.active) return;
     const state = currentState;
-    const { top, title, sub, offers, actions } = ensureStructure();
+    const { top, title, offers, actions } = ensureStructure();
     top.textContent = `Gold: ${state.gold}`;
-    title.textContent = "Vendor";
-    sub.textContent = "Choose progression offers to buy";
+    title.textContent = "Shop";
     offers.innerHTML = "";
     actions.innerHTML = "";
 
@@ -110,28 +101,22 @@ export function mountVendorShopMenu(args: {
       btn.disabled = disabled;
       btn.dataset.index = String(i);
 
-      const topRow = document.createElement("div");
-      topRow.className = "deckCardTopRow";
-      const family = document.createElement("span");
-      family.className = "deckCardTier";
-      family.textContent = rewardFamilyLabel(offer.option.family);
-      const price = document.createElement("span");
-      price.className = "deckCardRarity";
-      price.textContent = offer.isSold ? "Sold" : `${offer.priceG}g`;
-      topRow.appendChild(family);
-      topRow.appendChild(price);
-
       const name = document.createElement("div");
       name.className = "deckCardTitle";
       name.textContent = view.title;
-
-      const body = document.createElement("div");
-      body.className = "deckCardSub";
-      body.textContent = view.subtitle;
-
-      btn.appendChild(topRow);
       btn.appendChild(name);
-      btn.appendChild(body);
+
+      if (view.description) {
+        const desc = document.createElement("div");
+        desc.className = "deckCardDesc";
+        desc.textContent = view.description;
+        btn.appendChild(desc);
+      }
+
+      const price = document.createElement("div");
+      price.className = "vendorStateText";
+      price.textContent = offer.isSold ? "Sold" : `${offer.priceG}g`;
+      btn.appendChild(price);
       tapSafe.bindActivate(btn, () => args.onBuy(i));
       offers.appendChild(btn);
     }

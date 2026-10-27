@@ -136,7 +136,8 @@ import {
 } from "../engine/render/sprites/renderSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
 import type { TableMapCell, TableMapDef } from "./map/formats/table/tableMapTypes";
-import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
+import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId, withoutStructureStamps } from "./map/authored/authoredMapRegistry";
+import { getSettings } from "../settings/settingsStore";
 import {
   activateMapDefAsync,
   getActiveMap,
@@ -155,10 +156,6 @@ import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
 import { DEFAULT_GAME_SPEED, clampGameSpeed, getUserSettings, updateUserSettings } from "../userSettings";
-import { neutralMobSpritesReady, preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprites";
-import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
-import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
-import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
 import {
   getPoeMapObjectiveDebugSnapshot,
@@ -565,13 +562,18 @@ export function createGame(args: CreateGameArgs) {
 
   const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
 
+  function applyStructureVisibility(def: TableMapDef | undefined): TableMapDef | undefined {
+    if (!def || !getSettings().system.structuresDisabled) return def;
+    return withoutStructureStamps(def);
+  }
+
   function getStaticMapById(id: string | undefined): TableMapDef | undefined {
     if (!id) return undefined;
-    return getAuthoredMapDefByMapId(id);
+    return applyStructureVisibility(getAuthoredMapDefByMapId(id));
   }
 
   function getDefaultStaticMap(): TableMapDef | undefined {
-    return staticMaps[0];
+    return applyStructureVisibility(staticMaps[0]);
   }
 
   function restorePendingNpcFacing(): void {
@@ -1639,7 +1641,6 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
     preloadVendorNpcSprites();
     preloadRenderSprites();
-    preloadNeutralMobSprites();
     preloadSfx();
     preloadKenneyTiles();
   }
@@ -1874,7 +1875,6 @@ export function createGame(args: CreateGameArgs) {
     w.floatTextIsPlayer = [];
     w.uiFloatTextSeed = 0;
     w.npcs = [];
-    w.neutralMobs = [];
   }
 
   function clearPaletteSnapshotViewerState(w: World): void {
@@ -2209,7 +2209,6 @@ export function createGame(args: CreateGameArgs) {
 
     clearFloorEntities(w);
     applyMapFeaturesFromCells(w);
-    spawnMilestonePigeonNearPlayer(w);
     let objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     const isPoeMapFloor = objectiveSpec.objectiveType === "POE_MAP_CLEAR";
     resetLootGoblinFloorState(w);
@@ -2480,7 +2479,6 @@ export function createGame(args: CreateGameArgs) {
 
     // DEBUG: spawn offset
     applyDebugSpawn(world);
-    spawnMilestonePigeonNearPlayer(world);
 
     hideProgressionRewardMenu();
   }
@@ -2591,8 +2589,7 @@ export function createGame(args: CreateGameArgs) {
 
   function isOptionalRuntimeSpriteIdForLoading(spriteId: string): boolean {
     const normalized = normalizeRuntimeSpriteId(spriteId);
-    return normalized.startsWith("entities/npc/vendor/")
-      || normalized.startsWith("entities/animals/pigeon/");
+    return normalized.startsWith("entities/npc/vendor/");
   }
 
   function collectEnemySkinsForReadiness(runtimeSpriteIds: string[]): string[] {
@@ -2617,7 +2614,6 @@ export function createGame(args: CreateGameArgs) {
     preloadEnemySprites(requiredEnemySkins, awaitedPaletteVariantKey);
     preloadBossSprites(undefined, awaitedPaletteVariantKey);
     preloadVendorNpcSprites(awaitedPaletteVariantKey);
-    preloadNeutralMobSprites(awaitedPaletteVariantKey);
     preloadRenderSprites();
 
     const start = performance.now();
@@ -2664,10 +2660,9 @@ export function createGame(args: CreateGameArgs) {
         const vendorReady = vendorNpcSpritesReady(awaitedPaletteVariantKey);
         const enemyReady = enemySpritesReady(requiredEnemySkins, awaitedPaletteVariantKey);
         const bossReady = bossSpritesReady(undefined, awaitedPaletteVariantKey);
-        const neutralReady = neutralMobSpritesReady(awaitedPaletteVariantKey);
 
-        // Optional gate: vendor + pigeon assets are nice-to-have at map entry.
-        const optionalReady = vendorReady && neutralReady;
+        // Optional gate: vendor assets are nice-to-have at map entry.
+        const optionalReady = vendorReady;
         const blockingGates: string[] = [];
         if (!playerReady) blockingGates.push("player");
         if (!enemyReady) blockingGates.push("enemy");
@@ -2675,7 +2670,6 @@ export function createGame(args: CreateGameArgs) {
         if (!projectilesReady) blockingGates.push("projectiles");
         if (!runtimeReady) blockingGates.push("runtime");
         if (!vendorReady) blockingGates.push("vendor(optional)");
-        if (!neutralReady) blockingGates.push("neutral(optional)");
 
         const ready =
           playerReady
@@ -2691,7 +2685,6 @@ export function createGame(args: CreateGameArgs) {
               activePaletteVariantKey,
               vendorReady,
               bossReady,
-              neutralReady,
             });
           }
           resolve("READY");
@@ -2709,7 +2702,6 @@ export function createGame(args: CreateGameArgs) {
             vendorReady,
             enemyReady,
             bossReady,
-            neutralReady,
             projectilesReady,
             runtimeReady,
             failedProjectileSpriteIds,
@@ -2733,7 +2725,6 @@ export function createGame(args: CreateGameArgs) {
             vendorReady,
             enemyReady,
             bossReady,
-            neutralReady,
             projectilesReady,
             runtimeReady,
             failedProjectileSpriteIds,
@@ -3652,8 +3643,6 @@ export function createGame(args: CreateGameArgs) {
       movementSystem(world, input, dtSim);
     }
     tickPoeMapObjective(world);
-    neutralBirdAISystem(world, dtSim);
-    neutralAnimatedMobsSystem(world, dtSim);
     roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
     executeHostileSpawnRequests(
       world,

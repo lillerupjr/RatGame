@@ -37,14 +37,6 @@ export const DEFAULT_HOSTILE_SPAWN_BURST_CHANCE = 0.16;
 export const DEFAULT_HOSTILE_SPAWN_BURST_EXTRA_ATTEMPTS = 1;
 export const DEFAULT_HOSTILE_SPAWN_MIN_INTERVAL_SEC = 1.25;
 
-export const NEUTRAL_BIRD_FORCE_STATES = [
-  "NONE",
-  "IDLE",
-  "TAKEOFF",
-  "FLY_TO_TARGET",
-  "LAND",
-] as const;
-
 export function clampGameSpeed(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_GAME_SPEED;
   return Math.max(MIN_GAME_SPEED, Math.min(MAX_GAME_SPEED, value));
@@ -171,12 +163,8 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
 
   disableVisualCompiledCutoutCache: false,
   mapOverlaysDisabled: false,
+  structuresDisabled: true,
   rampFaces: false,
-
-  neutralBirdDisabled: false,
-  neutralBirdForceState: "NONE",
-  neutralBirdDisableTransitions: false,
-  neutralBirdDebugRepickTarget: false,
 
   hostileSpawnT0PowerPerSec: DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC,
   hostileSpawnT120PowerPerSec: DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC,
@@ -235,14 +223,8 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
 
     disableVisualCompiledCutoutCache: !!merged.disableVisualCompiledCutoutCache,
     mapOverlaysDisabled: !!merged.mapOverlaysDisabled,
+    structuresDisabled: merged.structuresDisabled !== false,
     rampFaces: !!merged.rampFaces,
-
-    neutralBirdDisabled: !!merged.neutralBirdDisabled,
-    neutralBirdForceState: NEUTRAL_BIRD_FORCE_STATES.includes(merged.neutralBirdForceState)
-      ? merged.neutralBirdForceState
-      : "NONE",
-    neutralBirdDisableTransitions: !!merged.neutralBirdDisableTransitions,
-    neutralBirdDebugRepickTarget: !!merged.neutralBirdDebugRepickTarget,
 
     hostileSpawnT0PowerPerSec: clampFinite(
       merged.hostileSpawnT0PowerPerSec,

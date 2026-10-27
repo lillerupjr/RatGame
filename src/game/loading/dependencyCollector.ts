@@ -91,15 +91,6 @@ export function collectFloorDependencies(): DependencySet {
     }
   }
 
-  // Neutral pigeon core set.
-  for (const dir of ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"]) {
-    for (let i = 0; i < 10; i++) {
-      const frame = `frame_${String(i).padStart(3, "0")}`;
-      spriteIds.add(`entities/animals/pigeon/rotations/${dir}/${frame}`);
-      spriteIds.add(`entities/animals/pigeon/animations/flying/${dir}/${frame}`);
-    }
-  }
-
   audioIds.add("FLOOR_START");
 
   return {

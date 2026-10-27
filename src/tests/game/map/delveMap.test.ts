@@ -211,7 +211,7 @@ describe("delve act map", () => {
     const map = createDelveMap(42);
     const combat = map.startNodeIds.map((id) => map.nodes.get(id)).find(Boolean);
     expect(combat).toBeTruthy();
-    expect(["SURVIVE", "TIME_TRIAL"]).toContain(floorArchetypeForNode(combat!));
+    expect(floorArchetypeForNode(combat!)).toBe("SURVIVE");
 
     const rest = Array.from(map.nodes.values()).find((node) => node.nodeType === "REST");
     const boss = map.nodes.get(map.bossNodeId);

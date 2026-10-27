@@ -1,6 +1,6 @@
 // Auto-generated registry of authored JSON maps (semantic + legacy).
 // @system   map-compilation/activation/floor-topology
-// @owns     build eager authored JSON map registry and id lookup helpers
+// @owns     build eager authored JSON map registry, id lookup helpers, and the structure-stripped def view
 // @doc      docs/canonical/map_compilation_activation_floor_topology.md
 // @agents   no JSON schema parsing or map activation; see jsonMapLoader.ts and authoredMapActivation.ts
 
@@ -25,6 +25,19 @@ function buildAuthoredMaps(): TableMapDef[] {
 }
 
 export const AUTHORED_MAP_DEFS: TableMapDef[] = buildAuthoredMaps();
+
+const DEFS_WITHOUT_STRUCTURES = new WeakMap<TableMapDef, TableMapDef>();
+
+/** Returns the map def with every `building` stamp removed; the underlying fields stay. */
+export function withoutStructureStamps(def: TableMapDef): TableMapDef {
+  if (!def.stamps || !def.stamps.some((stamp) => stamp.type === "building")) return def;
+  let stripped = DEFS_WITHOUT_STRUCTURES.get(def);
+  if (!stripped) {
+    stripped = { ...def, stamps: def.stamps.filter((stamp) => stamp.type !== "building") };
+    DEFS_WITHOUT_STRUCTURES.set(def, stripped);
+  }
+  return stripped;
+}
 
 export function getAuthoredMapDefById(id: string): TableMapDef | undefined {
   return AUTHORED_MAP_DEFS.find((m) => m.id === id);

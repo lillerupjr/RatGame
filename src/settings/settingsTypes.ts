@@ -15,13 +15,6 @@ export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hy
 export type WorldAtlasMode = "auto" | "dual" | "shared";
 export type PerfOverlayMode = "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all";
 
-export type NeutralBirdForceState =
-  | "NONE"
-  | "IDLE"
-  | "TAKEOFF"
-  | "FLY_TO_TARGET"
-  | "LAND";
-
 export const PALETTE_REMAP_WEIGHT_OPTIONS = [0, 25, 50, 75, 100] as const;
 export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number];
 
@@ -73,7 +66,6 @@ export type DebugToolsSettings = {
   lootGoblinOverlay: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
-  neutralBirdDrawDebug: boolean;
   objectivesShowZoneBounds: boolean;
   delveActShowCombatSubtypes: boolean;
   entityAnchorsEnabled: boolean;
@@ -127,12 +119,9 @@ export type SystemOverrides = {
 
   disableVisualCompiledCutoutCache: boolean;
   mapOverlaysDisabled: boolean;
+  structuresDisabled: boolean;
   rampFaces: boolean;
 
-  neutralBirdDisabled: boolean;
-  neutralBirdForceState: NeutralBirdForceState;
-  neutralBirdDisableTransitions: boolean;
-  neutralBirdDebugRepickTarget: boolean;
 
   hostileSpawnT0PowerPerSec: number;
   hostileSpawnT120PowerPerSec: number;

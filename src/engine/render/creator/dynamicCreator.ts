@@ -9,7 +9,6 @@ function resolveDynamicFamily(command: RenderCommand): DynamicRectFamily {
   if (
     payload.enemyIndex !== undefined
     || payload.npcIndex !== undefined
-    || payload.neutralMobIndex !== undefined
     || payload.feet !== undefined
   ) {
     return "entities";

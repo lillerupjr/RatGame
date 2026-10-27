@@ -22,3 +22,7 @@ This folder is intentionally strict. If a document does not describe the current
 - `canonical/ring_progression_system.md` — source of truth for ring/hand progression backend, effects pipeline, and hands screen UI
 - `contracts/implemented/ring_v1_backend_contract.md` — historical V1 backend contract (decisions and locked rules)
 - `contracts/implemented/ring_v1_content_catalog.md` — historical V1 ring content catalog (shipped ring list and provenance)
+
+## Current Content
+
+- `design/active_content.md` — which game modes, act map nodes, objectives, maps, bosses and characters are active in a player-facing run

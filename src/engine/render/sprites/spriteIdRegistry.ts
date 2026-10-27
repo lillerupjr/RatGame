@@ -23,8 +23,6 @@ const DIR_NAMES = [
 ] as const;
 
 const ENTITY_MANIFEST: SkinEntry[] = [
-  // animals
-  { path: "animals/pigeon", rotations: true, anims: [{ key: "flying", frames: 10 }] },
   // enemies
   { path: "enemies/small_rat", rotations: true, anims: [{ key: "running-4-frames", frames: 4 }] },
   { path: "enemies/brown_rat", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },

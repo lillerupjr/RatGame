@@ -41,8 +41,8 @@ Own the conversion from authored map definitions and selected floor intents into
 
 ## Pipeline
 
-1. **Authored Load**: `AUTHORED_MAP_DEFS` eager-imports authored JSON via `authoredMapRegistry.ts`. `loadTableMapDefFromJson()` validates JSON and produces `TableMapDef`; chunk grids may stitch chunks, add ocean borders, and preserve cells, stamps, road rects, lights, and authored `objectiveDefs`.
-2. **Floor Topology**: `createDelveMap(seed, config)` normalizes config, builds row/lane layouts and adjacent-row edges, validates connectivity, assigns node plans carrying `zoneId`, `mapId`, `objectiveId`, `variantSeed`, optional `bossId`, and assigns per-node `rewardFamily`. Deterministic path-select mode skips `DelveMap` and derives a one-row route in `game.ts` / `routeMapView.ts`.
+1. **Authored Load**: `AUTHORED_MAP_DEFS` eager-imports authored JSON via `authoredMapRegistry.ts`. `loadTableMapDefFromJson()` validates JSON and produces `TableMapDef`; chunk grids may stitch chunks, add ocean borders, and preserve cells, stamps, road rects, lights, and authored `objectiveDefs`. When `system.structuresDisabled` is on (the default), `game.ts` resolves map defs through `withoutStructureStamps(...)`, which drops every `building` stamp (from both stamps and building fields) before compile; the ground fields underneath stay.
+2. **Floor Topology**: `createDelveMap(seed, config)` normalizes config, builds row/lane layouts and adjacent-row edges, validates connectivity, assigns node plans carrying `zoneId`, `mapId`, `objectiveId`, `variantSeed`, optional `bossId`, and assigns per-node `rewardFamily`. Combat node objectives are rolled from `COMBAT_SUBTYPE_POOL` filtered by `COMBAT_SUBTYPE_RUNTIME_ENABLED`; only `SURVIVE_TIMER` (120 s) is enabled, while `POE_MAP_CLEAR` and `ZONE_TRIAL` are disabled but retained. Node types are gated by `NODE_TYPE_RUNTIME_ENABLED` (COMBAT, REST, SHOP, BOSS enabled; ELITE, QUESTION_MARK disabled). Deterministic path-select mode skips `DelveMap` and derives a one-row route in `game.ts` / `routeMapView.ts`.
 3. **Floor Intent**: `moveToNode()` records pending selection. `buildFloorIntentFromDelveNode()`, `buildDeterministicFloorIntent()`, or `buildFallbackFloorIntent()` creates `FloorIntent` with node/stage/zone/depth/floor index/archetype/map/objective/boss ids/variant seed/placement params.
 4. **Objective Binding**: `applyObjective()` shallow-clones `TableMapDef` and replaces `objectiveDefs` for the selected `ObjectiveId`; `objectiveSpecFromFloorIntent()` independently derives runtime spec from the same `FloorIntent`.
 5. **Activation**: `beginFloorLoad()` resolves base map, applies objective transforms, then calls `activateMapDefAsync(finalMap, variantSeed)`. `activateMapDef*()` clears `canvasGroundChunkCacheStore`, delegates to `setActiveMap*()`, stores active authored and compiled maps, and updates active render skin id.
@@ -59,6 +59,8 @@ Own the conversion from authored map definitions and selected floor intents into
 
 ## Invariants
 
+- With `structuresDisabled` on, no `building` stamp reaches `compileKenneyMapFromTable(...)`. The setting applies on the next map load. Authored JSON is never modified.
+- In the player-facing delve map every combat node uses `SURVIVE_TIMER`. Other combat objectives are reachable only through the dev-only path-select mode.
 - `TableMapDef` is authored input; `CompiledKenneyMap` is runtime topology output.
 - `AUTHORED_MAP_DEFS` is eager and sorted by `id`.
 - `activateMapDef*()` clears `canvasGroundChunkCacheStore` before switching maps.

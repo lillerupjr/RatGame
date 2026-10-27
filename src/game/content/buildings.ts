@@ -183,7 +183,6 @@ const CANONICAL_BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
   b1_news_paper_stand: makeMonolithicBuilding("b1_news_paper_stand", "structures/buildings/batch1/news_paper_stand/images", {}),
   b1_newspaper_stand: makeMonolithicBuilding("b1_newspaper_stand", "structures/buildings/batch1/newspaper_stand/images", {}),
   b1_police_car: makeMonolithicBuilding("b1_police_car", "structures/buildings/batch1/police_car/images", {}),
-  b1_rat_hooker: makeMonolithicBuilding("b1_rat_hooker", "structures/buildings/batch1/rat_hooker/images", {}),
   b1_street_light: makeMonolithicBuilding("b1_street_light", "structures/buildings/batch1/street_light/images", {}),
   b1_taxi: makeMonolithicBuilding("b1_taxi", "structures/buildings/batch1/taxi/images", {}),
   b1_thrash_can: makeMonolithicBuilding("b1_thrash_can", "structures/buildings/batch1/thrash_can/images", {}),
@@ -240,7 +239,7 @@ export const BUILDING_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
     "b1_background_test", "b1_container",
     "b1_hot_dog_stand1", "b1_hot_dog_stand2",
     "b1_lamp_post", "b1_news_paper_stand", "b1_newspaper_stand",
-    "b1_police_car", "b1_rat_hooker", "b1_street_light", "b1_taxi",
+    "b1_police_car", "b1_street_light", "b1_taxi",
     "b1_thrash_can", "b1_tree", "b1_tree2",
   ],
   [DEFAULT_BUILDING_PACK_ID]: [

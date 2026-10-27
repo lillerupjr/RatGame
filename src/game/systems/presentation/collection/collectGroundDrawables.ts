@@ -89,7 +89,6 @@ export function collectGroundDrawables(input: CollectionContext): void {
     getVendorNpcSpriteFrame,
     resolveVendorShadowFootOffset,
     snapPx,
-    resolveNeutralShadowFootOffset,
     playerSpritesReady,
     getPlayerSpriteFrame,
     getPlayerSkin,
@@ -562,74 +561,6 @@ export function collectGroundDrawables(input: CollectionContext): void {
           dw,
           dh,
         );
-      });
-    }
-
-    for (let i = 0; i < w.neutralMobs.length; i++) {
-      const mob = w.neutralMobs[i];
-      const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
-      const zAbs = zGround + (mob.pos.wzOffset ?? 0);
-      const support = getSupportSurfaceAt(mob.pos.wx, mob.pos.wy, compiledMap, zAbs);
-      const tx = Math.floor(mob.pos.wx / T);
-      const ty = Math.floor(mob.pos.wy / T);
-      if (!isTileInRenderRadius(tx, ty)) continue;
-      const frameCount = mob.spriteFrames.length;
-      const frame = frameCount > 0 ? mob.spriteFrames[mob.anim.frameIndex % frameCount] : null;
-      const spriteW = frame ? frame.width * mob.render.scale : 24;
-      const neutralShadowOffset = resolveNeutralShadowFootOffset(mob.kind);
-      const renderKey: RenderKey = {
-        slice: tx + ty,
-        within: tx,
-        baseZ: support.worldZ,
-        feetSortY: support.screenY + camY,
-        kindOrder: KindOrder.SHADOW,
-        stableId: 226000 + i,
-      };
-      const shadowParams: ShadowParams = {
-        worldX: mob.pos.wx,
-        worldY: mob.pos.wy,
-        worldZ: zAbs,
-        spriteWidth: spriteW,
-        shadowRadiusX: mob.shadowRadiusX,
-        shadowRadiusY: mob.shadowRadiusY,
-        castsShadow: mob.castsShadow,
-        shadowFootOffsetX: neutralShadowOffset.x,
-        shadowFootOffsetY: neutralShadowOffset.y,
-        screenOffsetX: camX,
-        screenOffsetY: camY,
-      };
-      enqueueSliceCommand(frameBuilder, renderKey, {
-        semanticFamily: "worldPrimitive",
-        finalForm: "primitive",
-        payload: {
-          shadowParams,
-        },
-      });
-      const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
-      entitySilhouetteMaskDraws.push((maskCtx: any) => {
-        const frameCountSilhouette = mob.spriteFrames.length;
-        if (frameCountSilhouette <= 0) return;
-        const frameSilhouette = mob.spriteFrames[mob.anim.frameIndex % frameCountSilhouette];
-        if (!frameSilhouette || frameSilhouette.width <= 0 || frameSilhouette.height <= 0) return;
-        const dw = frameSilhouette.width * mob.render.scale;
-        const dh = frameSilhouette.height * mob.render.scale;
-        const anchorX = RENDER_ENTITY_ANCHORS
-          ? resolveAnchor01((mob.render as any).anchorX01, mob.render.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
-          : (mob.render.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
-        const anchorY = RENDER_ENTITY_ANCHORS
-          ? resolveAnchor01((mob.render as any).anchorY01, mob.render.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
-          : (mob.render.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
-        const dx = feet.screenX - dw * anchorX;
-        const dy = feet.screenY - dh * anchorY;
-        if (mob.render.flipX) {
-          maskCtx.save();
-          maskCtx.translate(snapPx(dx + dw), snapPx(dy));
-          maskCtx.scale(-1, 1);
-          maskCtx.drawImage(frameSilhouette, 0, 0, dw, dh);
-          maskCtx.restore();
-          return;
-        }
-        maskCtx.drawImage(frameSilhouette, snapPx(dx), snapPx(dy), dw, dh);
       });
     }
 

@@ -18,7 +18,6 @@ function makeBaseInput(overrides: Record<string, unknown> = {}) {
     evx: [],
     evy: [],
     npcs: [],
-    neutralMobs: [],
     pAlive: [],
     prHidden: [],
     prPlayerFireX: [],
@@ -264,36 +263,6 @@ describe("collectEntityDrawables", () => {
     expect(npcCommand?.payload.image).toBe(atlasImage);
     expect(npcCommand?.payload.sx).toBe(20);
     expect(npcCommand?.payload.sy).toBe(30);
-  });
-
-  it("routes neutral mob direct frames through the dynamic atlas", () => {
-    const neutralFrame = { width: 20, height: 18, id: "pigeon-frame" } as any;
-    const atlasImage = { width: 512, height: 512, id: "dynamic-atlas" } as any;
-    const input = makeBaseInput({
-      w: {
-        neutralMobs: [{
-          pos: { wx: 32, wy: 32, wzOffset: 0 },
-          anim: { frameIndex: 0 },
-          spriteFrames: [neutralFrame],
-          render: {
-            scale: 1,
-            anchorX: 0.5,
-            anchorY: 0.5,
-            flipX: false,
-          },
-        }],
-      },
-      getDynamicAtlasFrameForImage: vi.fn((image: object) => (
-        image === neutralFrame ? { image: atlasImage, sx: 70, sy: 80, sw: 20, sh: 18 } : null
-      )),
-    });
-
-    const commands = collectCommands(input);
-    const neutralCommand = commands.find((command) => command.payload.neutralMobIndex === 0);
-
-    expect(neutralCommand?.payload.image).toBe(atlasImage);
-    expect(neutralCommand?.payload.sx).toBe(70);
-    expect(neutralCommand?.payload.sy).toBe(80);
   });
 
   it("routes projectile sprites through the dynamic atlas", () => {

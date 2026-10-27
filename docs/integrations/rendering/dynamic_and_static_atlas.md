@@ -114,7 +114,6 @@ Included families:
 - projectiles
 - VFX
 - vendor NPCs
-- neutral mobs
 - player
 - enemies
 
@@ -155,7 +154,6 @@ Included families:
 - projectiles
 - VFX
 - vendor NPCs
-- neutral mobs
 - player
 - enemies
 
@@ -199,7 +197,6 @@ registries and sprite-pack frame inventories:
 - projectile sprites
 - VFX sprite ids
 - vendor NPC sprites
-- neutral mob sprites
 - player sprite-pack ids
 - enemy sprite-pack ids
 

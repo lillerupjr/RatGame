@@ -85,7 +85,6 @@ export type QuadRenderPiece = CommandPayloadBase & {
   baseColor?: string;
   isBoss?: boolean;
   npcIndex?: number;
-  neutralMobIndex?: number;
   projectileIndex?: number;
   zLift?: number;
   vfxIndex?: number;

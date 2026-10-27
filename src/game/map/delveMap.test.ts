@@ -38,3 +38,16 @@ describe("assignRewardFamilies", () => {
     }
   });
 });
+
+describe("combat subtypes", () => {
+  test("every combat node uses the survive timer objective", () => {
+    for (const seed of [1, 7, 42, 100, 999]) {
+      const map = createDelveMap(seed);
+      for (const node of map.nodes.values()) {
+        if (node.nodeType !== "COMBAT") continue;
+        expect(node.combatSubtype).toBe("SURVIVE_TIMER");
+        expect(node.runtime.objectiveId).toBe("SURVIVE_TIMER");
+      }
+    }
+  });
+});

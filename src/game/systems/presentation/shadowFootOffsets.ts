@@ -17,10 +17,6 @@ const VENDOR_OFFSETS_BY_KIND: Record<"vendor" | "healer", ShadowFootOffset> = {
   healer: { x: 0, y: 0 },
 };
 
-const NEUTRAL_OFFSETS_BY_KIND: Record<string, ShadowFootOffset> = {
-  PIGEON: { x: 4, y: -2 },
-};
-
 export function resolvePlayerShadowFootOffset(skin: string | null | undefined): ShadowFootOffset {
   if (!skin) return DEFAULT_OFFSET;
   return PLAYER_OFFSETS_BY_SKIN[skin] ?? DEFAULT_OFFSET;
@@ -37,10 +33,6 @@ export function resolveEnemyShadowFootOffset(type: EnemyId): ShadowFootOffset {
 
 export function resolveVendorShadowFootOffset(kind: "vendor" | "healer"): ShadowFootOffset {
   return VENDOR_OFFSETS_BY_KIND[kind] ?? DEFAULT_OFFSET;
-}
-
-export function resolveNeutralShadowFootOffset(kind: string): ShadowFootOffset {
-  return NEUTRAL_OFFSETS_BY_KIND[kind] ?? DEFAULT_OFFSET;
 }
 
 export function resolveProjectileShadowFootOffset(_kind: number): ShadowFootOffset {

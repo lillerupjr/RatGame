@@ -326,10 +326,6 @@ export class Canvas2DRenderer {
           this.drawNpc(payload);
           return;
         }
-        if (payload.neutralMobIndex !== undefined) {
-          this.drawNeutralMob(payload);
-          return;
-        }
         if (payload.projectileIndex !== undefined) {
           this.drawProjectile(payload);
           return;
@@ -337,7 +333,6 @@ export class Canvas2DRenderer {
         if (payload.feet) {
           if (payload.enemyIndex !== undefined) this.drawEnemy(payload);
           else if (payload.npcIndex !== undefined) this.drawNpc(payload);
-          else if (payload.neutralMobIndex !== undefined) this.drawNeutralMob(payload);
           else this.drawPlayer(payload);
         }
       });
@@ -860,71 +855,6 @@ export class Canvas2DRenderer {
     const ctx = this.frameContext.ctx;
     ctx.drawImage(frame.img, frame.sx, frame.sy, frame.sw, frame.sh, Math.round(draw.dx), Math.round(draw.dy), draw.dw, draw.dh);
     this.drawEntityAnchorDebug(feet.screenX, feet.screenY, draw.dx, draw.dy, draw.dw, draw.dh);
-  }
-
-  private drawNeutralMob(data: any): void {
-    const i = Number(data.neutralMobIndex);
-    const mob = this.deps.w.neutralMobs[i];
-    const feet = data.feet as any;
-    const frameCount = mob.spriteFrames.length;
-    if (frameCount <= 0) return;
-    const frame = mob.spriteFrames[mob.anim.frameIndex % frameCount];
-    if (!frame || frame.width <= 0 || frame.height <= 0) return;
-    const draw = this.resolveImageDraw(frame.width, frame.height, mob.render.scale, (mob.render as any).anchorX01, (mob.render as any).anchorY01, mob.render.anchorX, mob.render.anchorY, feet.screenX, feet.screenY);
-    const ctx = this.frameContext.ctx;
-    if (mob.render.flipX) {
-      ctx.save();
-      ctx.translate(snapPx(draw.dx + draw.dw), snapPx(draw.dy));
-      ctx.scale(-1, 1);
-      ctx.drawImage(frame, 0, 0, draw.dw, draw.dh);
-      ctx.restore();
-    } else {
-      ctx.drawImage(frame, snapPx(draw.dx), snapPx(draw.dy), draw.dw, draw.dh);
-    }
-    this.drawEntityAnchorDebug(feet.screenX, feet.screenY, draw.dx, draw.dy, draw.dw, draw.dh);
-
-    if (this.deps.debug.neutralBirdAI.drawDebug) {
-      const targetWx = (mob.behavior.targetTileX + 0.5) * this.deps.T;
-      const targetWy = (mob.behavior.targetTileY + 0.5) * this.deps.T;
-      const targetZ = this.deps.tileHAtWorld(targetWx, targetWy);
-      const targetP = this.deps.toScreenAtZ(targetWx, targetWy, targetZ);
-      const dPlayerTiles = Math.sqrt(Math.max(0, mob.behavior.lastPlayerDist2));
-      const dTargetTiles = Math.sqrt(Math.max(0, mob.behavior.lastTargetDist2));
-      const lines = [
-        "PIGEON",
-        `STATE: ${mob.behavior.state}`,
-        `dPlayer: ${dPlayerTiles.toFixed(1)}`,
-        `target: (${mob.behavior.targetTileX},${mob.behavior.targetTileY})`,
-        `dTarget: ${dTargetTiles.toFixed(1)}`,
-      ];
-      ctx.save();
-      ctx.font = "10px monospace";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "bottom";
-      const tx = snapPx(draw.dx);
-      const ty = snapPx(draw.dy - 4);
-      const pad = 2;
-      let textWidth = 0;
-      for (let li = 0; li < lines.length; li++) textWidth = Math.max(textWidth, ctx.measureText(lines[li]).width);
-      const lineHeight = 11;
-      const textHeight = lineHeight * lines.length;
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(tx - pad, ty - textHeight - pad, textWidth + pad * 2, textHeight + pad * 2);
-      ctx.fillStyle = "#8fffb0";
-      for (let li = 0; li < lines.length; li++) {
-        const y = ty - lineHeight * (lines.length - 1 - li);
-        ctx.fillText(lines[li], tx, y);
-      }
-      ctx.strokeStyle = "#8fffb0";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(targetP.x - 5, targetP.y);
-      ctx.lineTo(targetP.x + 5, targetP.y);
-      ctx.moveTo(targetP.x, targetP.y - 5);
-      ctx.lineTo(targetP.x, targetP.y + 5);
-      ctx.stroke();
-      ctx.restore();
-    }
   }
 
   private drawProjectile(data: any): void {

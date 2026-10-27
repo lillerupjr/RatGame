@@ -8,7 +8,6 @@ import { listPlayerDynamicAtlasSpriteIds } from "../../../engine/render/sprites/
 import { listEnemyDynamicAtlasSpriteIds } from "../../../engine/render/sprites/enemySprites";
 import { listBossDynamicAtlasSpriteIds } from "../../../engine/render/sprites/bossSprites";
 import { listVendorNpcDynamicAtlasSpriteIds } from "../../../engine/render/sprites/vendorSprites";
-import { listNeutralMobDynamicAtlasSpriteIds } from "../../../engine/render/sprites/neutralSprites";
 import { listCurrencyDynamicAtlasSpriteIds } from "../../content/loot/currencyVisual";
 import { listVfxSpriteIds } from "../../content/vfxRegistry";
 import { listProjectileTravelSpriteIds } from "../../content/projectilePresentationRegistry";
@@ -83,7 +82,6 @@ export function collectDynamicAtlasSources(paletteVariantKey: string): DynamicAt
   addSpriteIdFamilySources(accumulator, listProjectileTravelSpriteIds(), paletteVariantKey, "directFrame");
   addSpriteIdFamilySources(accumulator, listVfxDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");
   addSpriteIdFamilySources(accumulator, listVendorNpcDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");
-  addSpriteIdFamilySources(accumulator, listNeutralMobDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");
   addSpriteIdFamilySources(accumulator, listPlayerDynamicAtlasSpriteIds(), paletteVariantKey, "spritePackFrame");
   addSpriteIdFamilySources(accumulator, listEnemyDynamicAtlasSpriteIds(), paletteVariantKey, "spritePackFrame");
   addSpriteIdFamilySources(accumulator, listBossDynamicAtlasSpriteIds(), paletteVariantKey, "spritePackFrame");
