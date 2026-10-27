@@ -20,11 +20,6 @@ export type RunEvent =
       objectiveId: string;
     }
   | {
-      type: "LEVEL_UP";
-      floorIndex: number;
-      level: number;
-    }
-  | {
       type: "CHEST_OPEN_REQUESTED";
       floorIndex: number;
       chestKind: "BOSS" | "OTHER";

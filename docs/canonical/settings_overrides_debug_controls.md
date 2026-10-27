@@ -44,7 +44,7 @@ Own persisted application settings: player preferences, debug visualization/tool
 5. **Legacy Facade**: `src/userSettings.ts` projects buckets into older `debug`, `game`, `render`, `audio` shape. Its `updateUserSettings(...)` translates legacy patches via `splitLegacyPatch(...)`; it is not a second store. `src/debugSettings.ts` supports older debug imports. Legacy `debug.palette*` inputs translate to `system` bucket writes.
 6. **Resolvers**: `resolveVerticalTiles(...)` derives effective vertical tiles from mode, viewport class, and stored values. `resolveDebugFlags(...)` combines debug plus selected system inputs. `resolveEffectiveWorldAtlasMode(...)` derives effective atlas mode from requested mode and selected backend.
 7. **UI Edit Paths**: `settingsPanel.ts` reads/writes through legacy facade and exposes user-bucket preferences only. `devToolsPanel.ts` writes bucket store directly through `saveDebugToolsSettings(...)`, `saveSystemOverrides(...)`, reset/hard-reset helpers, and dispatches `ratgame:settings-changed`. `SystemOverridesSection.ts` owns palette enable/group/id, `Saturation Weight`, `Darkness`. Snapshot viewer palette panel writes through `updateUserSettings(...)`, validates selection, persists current remap viewer controls, and force-enables palette swap while active.
-8. **Runtime Consumption**: `main.ts` consumes audio/dev visibility at startup. Runtime reads direct buckets via `getSettings()` for XP/spawn tuning and legacy `getUserSettings()` for older render/debug/game consumers. HUD perf overlay, and palette lab application update settings live.
+8. **Runtime Consumption**: `main.ts` consumes audio/dev visibility at startup. Runtime reads direct buckets via `getSettings()` for spawn tuning and legacy `getUserSettings()` for older render/debug/game consumers. HUD perf overlay, and palette lab application update settings live.
 
 ## Invariants
 
@@ -91,7 +91,7 @@ Own persisted application settings: player preferences, debug visualization/tool
 
 - Player settings to `src/main.ts`, audio settings, settings UI
 - Debug/render flags to presentation, HUD/debug overlays, dev tools
-- System overrides to hostile spawn director, XP progression, rendering overrides, gameplay tuning
+- System overrides to hostile spawn director, rendering overrides, gameplay tuning
 - Legacy surfaces to older runtime/UI imports via `src/userSettings.ts`, `src/debugSettings.ts`
 
 ## Extension

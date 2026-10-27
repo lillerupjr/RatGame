@@ -54,7 +54,7 @@ export type HudRefs = {
     vitalsOrbText: HTMLDivElement;
     vitalsArmorText: HTMLSpanElement;
     vitalsMomentumText: HTMLSpanElement;
-    lvlPill: HTMLSpanElement;
+    goldPill: HTMLSpanElement;
     bossBar: HTMLDivElement;
     bossTitle: HTMLDivElement;
     bossTrack: HTMLDivElement;
@@ -149,7 +149,7 @@ export type DomRefs = {
     vitalsOrbText: HTMLDivElement;
     vitalsArmorText: HTMLSpanElement;
     vitalsMomentumText: HTMLSpanElement;
-    lvlPill: HTMLSpanElement;
+    goldPill: HTMLSpanElement;
     interactPrompt: HTMLDivElement;
     mobileControlsRoot: HTMLDivElement;
     mobileMoveStick: HTMLDivElement;
@@ -250,7 +250,7 @@ export function getDomRefs(): DomRefs {
     const vitalsOrbText = getEl<HTMLDivElement>("vitalsOrbText");
     const vitalsArmorText = getEl<HTMLSpanElement>("vitalsArmorText");
     const vitalsMomentumText = getEl<HTMLSpanElement>("vitalsMomentumText");
-    const lvlPill = getEl<HTMLSpanElement>("lvlPill");
+    const goldPill = getEl<HTMLSpanElement>("goldPill");
     const bossBar = getEl<HTMLDivElement>("hudBossBar");
     const bossTitle = getEl<HTMLDivElement>("hudBossTitle");
     const bossTrack = getEl<HTMLDivElement>("hudBossTrack");
@@ -310,7 +310,7 @@ export function getDomRefs(): DomRefs {
         vitalsOrbText,
         vitalsArmorText,
         vitalsMomentumText,
-        lvlPill,
+        goldPill,
         bossBar,
         bossTitle,
         bossTrack,
@@ -430,7 +430,7 @@ export function getDomRefs(): DomRefs {
         vitalsOrbText,
         vitalsArmorText,
         vitalsMomentumText,
-        lvlPill,
+        goldPill,
         interactPrompt,
         mobileControlsRoot,
         mobileMoveStick,

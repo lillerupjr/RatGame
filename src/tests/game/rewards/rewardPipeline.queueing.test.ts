@@ -1,17 +1,15 @@
 import { describe, expect, test } from "vitest";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
-import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
 import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
 import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
 
 describe("durable reward pipeline queueing", () => {
-  test("level-up grants nothing and the floor progression reward is queued", () => {
+  test("zone clear plus objective completion queues one floor progression reward", () => {
     const world = createRewardPipelineWorld(41, "ZONE_TRIAL");
 
     world.runEvents.push(
       { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
-      { type: "LEVEL_UP", floorIndex: 0, level: 2 },
       { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_ZONE_TRIAL" },
     );
 
@@ -27,7 +25,7 @@ describe("durable reward pipeline queueing", () => {
     expect(first?.createdSeq).toBe(1);
     expect(first?.family).toBe("RING");
     expect(world.progressionReward.active).toBe(true);
-    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(world.run.runGold).toBe(0);
 
     dismissActiveRewardUi(world);
     resolveActiveRewardTicket(world);

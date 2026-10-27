@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
-import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
@@ -19,7 +18,7 @@ describe("durable reward pipeline zone+objective same frame", () => {
 
     rewardSchedulerSystem(world);
     expect(world.rewardTickets).toHaveLength(1);
-    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(world.run.runGold).toBe(0);
 
     expect(rewardPresenterSystem(world)).toBe(true);
     const first = getActiveTicket(world);

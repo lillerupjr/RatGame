@@ -18,7 +18,7 @@ Own non-boss hostile behavior, auto-spawn pacing, spawn request execution, and h
 - Boss spawning/phases/abilities: `docs/canonical/boss_encounter_system.md`
 - Neutral monster runtime except explicit exclusion from hostile pacing
 - Objective-authored population/scripted spawns except reused hooks: `docs/canonical/progression_objectives_rewards.md`
-- Reward/drop/gold/xp/trigger outcomes after kills: `docs/canonical/progression_objectives_rewards.md`
+- Reward/drop/gold/trigger outcomes after kills: `docs/canonical/progression_objectives_rewards.md`
 - Rendering/audio/debug UI consumption: `docs/canonical/presentation_rendering_pipeline.md`, `docs/canonical/ui_shell_menus_runtime_panels.md`
 
 ## Entrypoints

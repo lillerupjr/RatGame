@@ -45,8 +45,7 @@ Define the shared mutable `World` runtime object used by gameplay, progression, 
 - `createWorld()` returns a fresh object with initialized array-backed stores.
 - Input `StageDef` is cloned; stored `world.stage` is not the original.
 - `world.runSeed` is provided seed or `1337`; `world.stageId` comes from cloned stage id.
-- `world.run.level` and `world.level` start at `1`.
-- `world.run.xpToNextLevel` starts from `getSettings().system?.xpLevelBase` or `DEFAULT_XP_LEVEL_BASE`.
+- `world.run` holds only `runGold`, starting at `0`.
 - `recomputeDerivedStats(w)` runs before constructor return.
 - Player position is anchor-based and grid-authoritative.
 - Enemy/zone/projectile/pickup/VFX families are index-based and gated by alive arrays: `eAlive`, `zAlive`, `pAlive`, `xAlive`, `vfxAlive`.
@@ -69,7 +68,6 @@ Define the shared mutable `World` runtime object used by gameplay, progression, 
 
 - `StageDef` and seed passed to `createWorld()`
 - Spawn from `getSpawnWorld(KENNEY_TILE_WORLD)`
-- Settings from `getSettings()` for XP threshold
 - Derived-stat normalization from `recomputeDerivedStats()`
 - `GameEvent` definitions from `src/game/events.ts`
 

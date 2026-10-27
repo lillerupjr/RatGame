@@ -139,7 +139,6 @@ describe("settings bucket defaults", () => {
     const sanitized = sanitizeSystemOverrides({
       gameSpeed: 99,
       paletteSWeightPercent: 62 as any,
-      xpLevelGrowth: 99,
       paletteGroup: "test",
       paletteId: "unknown",
       worldAtlasMode: "bogus" as any,
@@ -150,7 +149,6 @@ describe("settings bucket defaults", () => {
 
     expect(sanitized.gameSpeed).toBeLessThanOrEqual(1.5);
     expect(sanitized.paletteSWeightPercent).toBe(50);
-    expect(sanitized.xpLevelGrowth).toBeLessThanOrEqual(3);
     expect(sanitized.paletteId.length).toBeGreaterThan(0);
     expect(sanitized.worldAtlasMode).toBe("auto");
     expect(DEFAULT_SYSTEM_OVERRIDES.gameSpeed).toBe(1);

@@ -5,7 +5,7 @@
 
 import type { ProgressionRewardFamily } from "../progression/rewards/rewardFamilies";
 
-export type RewardTicketSource = "FLOOR_COMPLETION" | "BOSS_CHEST" | "SIDE_OBJECTIVE" | "LEVEL_UP";
+export type RewardTicketSource = "FLOOR_COMPLETION" | "BOSS_CHEST" | "SIDE_OBJECTIVE";
 export type RewardTicketStatus = "PENDING" | "ACTIVE" | "RESOLVED";
 
 export type RewardTicket = {

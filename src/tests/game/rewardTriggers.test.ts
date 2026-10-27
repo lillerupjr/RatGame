@@ -4,7 +4,6 @@ import { rewardRunEventProducerSystem } from "../../game/systems/progression/rew
 import { rewardSchedulerSystem } from "../../game/systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "../../game/systems/progression/rewardPresenterSystem";
 import { createRewardPipelineWorld } from "./rewards/rewardPipeline.testUtils";
-import { OBJECTIVE_COMPLETION_GOLD } from "../../game/rewards/rewardDirector";
 
 describe("reward pipeline runtime facts", () => {
   test("chest handshake does not start boss chest reward", () => {
@@ -22,7 +21,7 @@ describe("reward pipeline runtime facts", () => {
     expect(w.floorRewardBudget.nonObjectiveRewardsRemaining).toBe(0);
   });
 
-  test("objective completion grants gold plus progression reward once and edge-gates repeats", () => {
+  test("objective completion grants progression reward once and edge-gates repeats", () => {
     const w = createRewardPipelineWorld(6, "ZONE_TRIAL");
     w.objectiveStates = [{ id: "OBJ_A", status: "COMPLETED" }];
 
@@ -34,7 +33,7 @@ describe("reward pipeline runtime facts", () => {
     expect(started1).toBe(true);
     expect(w.state).toBe("REWARD");
     expect(w.progressionReward.active).toBe(true);
-    expect(w.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(w.run.runGold).toBe(0);
     expect(w.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
 
     resolveActiveRewardTicket(w);
@@ -46,7 +45,7 @@ describe("reward pipeline runtime facts", () => {
     rewardSchedulerSystem(w);
     const started2 = rewardPresenterSystem(w);
     expect(started2).toBe(false);
-    expect(w.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(w.run.runGold).toBe(0);
   });
 
   test("does not start objective reward without completed objective state", () => {
@@ -63,7 +62,7 @@ describe("reward pipeline runtime facts", () => {
     expect(w.objectiveStates[0].status).toBe("ACTIVE");
   });
 
-  test("vendor/heal objectives grant gold and start progression reward UI", () => {
+  test("vendor/heal objectives start progression reward UI without gold", () => {
     const vendor = createRewardPipelineWorld(12, "NORMAL");
     vendor.floorArchetype = "VENDOR";
     vendor.objectiveStates = [{ id: "OBJ_VENDOR", status: "COMPLETED" }];
@@ -71,7 +70,7 @@ describe("reward pipeline runtime facts", () => {
     rewardSchedulerSystem(vendor);
     expect(rewardPresenterSystem(vendor)).toBe(true);
     expect(vendor.progressionReward.active).toBe(true);
-    expect(vendor.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(vendor.run.runGold).toBe(0);
 
     const heal = createRewardPipelineWorld(13, "NORMAL");
     heal.floorArchetype = "HEAL";
@@ -80,6 +79,6 @@ describe("reward pipeline runtime facts", () => {
     rewardSchedulerSystem(heal);
     expect(rewardPresenterSystem(heal)).toBe(true);
     expect(heal.progressionReward.active).toBe(true);
-    expect(heal.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(heal.run.runGold).toBe(0);
   });
 });

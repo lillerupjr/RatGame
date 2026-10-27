@@ -8,8 +8,7 @@ export type ProgressionRewardFamily = "RING";
 export type ProgressionRewardSource =
   | "FLOOR_COMPLETION"
   | "BOSS_CHEST"
-  | "SIDE_OBJECTIVE"
-  | "LEVEL_UP";
+  | "SIDE_OBJECTIVE";
 
 export function rewardFamilyLabel(family: ProgressionRewardFamily): string {
   switch (family) {

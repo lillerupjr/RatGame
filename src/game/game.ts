@@ -183,7 +183,6 @@ import {
 import { equipRing, unequipRing } from "./progression/rings/ringState";
 import { equipStarterRingForCharacter } from "./progression/rings/characterStarterRingMap";
 import { getGold } from "./economy/gold";
-import { ensureRunProgressionState } from "./economy/xp";
 import { generateVendorProgressionOffers } from "./vendor/generateVendorProgressionOffers";
 import { createVendorState } from "./vendor/vendorState";
 import { tryPurchaseVendorOffer } from "./vendor/vendorPurchase";
@@ -249,7 +248,7 @@ type HudRefs = {
   vitalsOrbText: HTMLDivElement;
   vitalsArmorText: HTMLSpanElement;
   vitalsMomentumText: HTMLSpanElement;
-  lvlPill: HTMLSpanElement;
+  goldPill: HTMLSpanElement;
   bossBar: HTMLDivElement;
   bossTitle: HTMLDivElement;
   bossTrack: HTMLDivElement;
@@ -428,7 +427,7 @@ export function precomputeStaticMapData(): void {
 
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
-  args.hud.lvlPill.hidden = false;
+  args.hud.goldPill.hidden = false;
   const input: InputState = createInputState();
   const uiInteractionState = {
     textInputFocused: false,
@@ -3333,7 +3332,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.perfOverlayModeSelect.hidden = !settings.render.renderPerfCountersEnabled;
     args.hud.perfOverlayModeSelect.value = settings.debug.perfOverlayMode;
     args.hud.timePill.hidden = false;
-    args.hud.lvlPill.hidden = false;
+    args.hud.goldPill.hidden = false;
     args.hud.palettePill.hidden = !shouldShowPaletteHudDebugOverlay(settings);
     args.hud.killsPill.hidden = true;
     args.hud.hpPill.hidden = true;
@@ -3342,8 +3341,7 @@ export function createGame(args: CreateGameArgs) {
 
     args.hud.fpsPill.textContent = `FPS ${Math.round((world as any).fps ?? 0)}`;
     args.hud.timePill.textContent = `\u23f1 ${formatTimeMMSS(world.time)}`;
-    const runProgress = ensureRunProgressionState(world);
-    args.hud.lvlPill.textContent = `Lv ${runProgress.level} · ${Math.floor(runProgress.xp)}/${Math.floor(runProgress.xpToNextLevel)} XP`;
+    args.hud.goldPill.textContent = `Gold: ${Math.max(0, Math.floor(getGold(world)))}`;
     args.hud.palettePill.textContent = formatPaletteHudDebugText(resolveActivePaletteId());
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
@@ -3622,7 +3620,6 @@ export function createGame(args: CreateGameArgs) {
     // phase time drives the current floor and transition runtime state
     world.phaseTime += dtSim;
     world.timeSec = world.phaseTime;
-    ensureRunProgressionState(world);
     tickMomentumDecay(world, dtSim, world.timeSec);
     recomputeDerivedStats(world);
 

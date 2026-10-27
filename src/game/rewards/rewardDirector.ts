@@ -16,8 +16,6 @@ export type RewardOutcome =
   | { type: "GRANT_GOLD"; amount: number; reason: string }
   | { type: "NO_REWARD"; reason: string };
 
-export const OBJECTIVE_COMPLETION_GOLD = 50;
-
 export function handleRewardEvent(
   budget: FloorRewardBudget,
   ev: RewardEvent,

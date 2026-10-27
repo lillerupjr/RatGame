@@ -36,8 +36,6 @@ import type { EnemyBrainState } from "../../game/systems/enemies/brain";
 import { createBossRuntimeState } from "../../game/bosses/bossRuntime";
 import type { BossRuntimeState, ArenaTileEffect } from "../../game/bosses/bossTypes";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
-import { getSettings } from "../../settings/settingsStore";
-import { DEFAULT_XP_LEVEL_BASE } from "../../settings/systemOverrides";
 import type {
   HostileSpawnDebugSnapshot,
   HostileSpawnDirectorState,
@@ -179,9 +177,6 @@ export type World = {
   deathFx: DeathFxState;
   run: {
     runGold: number;
-    xp: number;
-    level: number;
-    xpToNextLevel: number;
   };
   lighting: WorldLightingState;
 
@@ -323,11 +318,6 @@ export type World = {
   playerBeamDpsChaos: number;
   playerBeamDamageMeta?: DamageMeta;
   dotTickAcc: number;
-
-  // -------------------------
-  // Level (compatibility mirror of run.level)
-  // -------------------------
-  level: number;
 
   // Aim cache (used for melee cone / fallback aim)
   lastAimX: number;
@@ -636,9 +626,6 @@ export function createWorld(args: CreateWorldArgs): World {
     },
     run: {
       runGold: 0,
-      xp: 0,
-      level: 1,
-      xpToNextLevel: Math.max(1, Math.round(getSettings().system?.xpLevelBase ?? DEFAULT_XP_LEVEL_BASE)),
     },
     lighting: {
       darknessAlpha: 0.5,
@@ -763,7 +750,6 @@ export function createWorld(args: CreateWorldArgs): World {
     dotTickAcc: 0,
 
     // Level
-    level: 1,
 
     // Aim
     lastAimX: 1,

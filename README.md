@@ -12,7 +12,7 @@ Built from scratch in TypeScript with a custom engine: no game framework, just V
 
 1. **Pick a rat.** Five characters, each with their own starting weapon (syringe, pistol, throwing knife, laser, shotgun). Weapons fire automatically; you focus on movement.
 2. **Climb the act map.** Eight rows of branching nodes: combat floors, a shop, a rest stop and the act boss at the top.
-3. **Survive.** Each combat floor is a 120-second survival timer while a spawn director ramps up the pressure.
+3. **Survive.** Each combat floor is a 120-second survival timer while a spawn director ramps up the pressure. Enemies drop gold coins, which you spend at the shop.
 4. **Build with rings.** Clearing a floor offers a choice of rings. Rings sit on eight finger slots across two hands and stack stat modifiers, on-hit/on-kill triggers, damage-over-time effects and rules such as living bombs, poison trails or neighbor amplification.
 5. **Beat the boss.** The final row is a boss arena. Win or die, the run ends on a stats screen where you can submit to the online leaderboard.
 

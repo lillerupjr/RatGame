@@ -30,7 +30,7 @@ function anyRewardUiActive(world: World): boolean {
 }
 
 type PresentableRewardTicket = {
-  source: "FLOOR_COMPLETION" | "BOSS_CHEST" | "SIDE_OBJECTIVE" | "LEVEL_UP";
+  source: "FLOOR_COMPLETION" | "BOSS_CHEST" | "SIDE_OBJECTIVE";
   optionCount: number;
   family: ProgressionRewardFamily;
 };

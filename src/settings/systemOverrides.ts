@@ -21,8 +21,6 @@ export type EffectiveWorldAtlasMode = "dual" | "shared";
 export const MIN_GAME_SPEED = 0.5;
 export const MAX_GAME_SPEED = 1.5;
 export const DEFAULT_GAME_SPEED = 1.0;
-export const DEFAULT_XP_LEVEL_BASE = 15;
-export const DEFAULT_XP_LEVEL_GROWTH = 1.2;
 export const DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC = 0.6;
 export const DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC = 2.0;
 export const DEFAULT_HOSTILE_SPAWN_OVERTIME_POWER_PER_SEC_SLOPE = 0.006;
@@ -40,18 +38,6 @@ export const DEFAULT_HOSTILE_SPAWN_MIN_INTERVAL_SEC = 1.25;
 export function clampGameSpeed(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_GAME_SPEED;
   return Math.max(MIN_GAME_SPEED, Math.min(MAX_GAME_SPEED, value));
-}
-
-export function normalizeXpLevelBase(value: unknown): number {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return DEFAULT_XP_LEVEL_BASE;
-  return Math.max(1, Math.min(500, Math.round(numeric)));
-}
-
-export function normalizeXpLevelGrowth(value: unknown): number {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return DEFAULT_XP_LEVEL_GROWTH;
-  return Math.max(1, Math.min(3, numeric));
 }
 
 function clampFinite(value: unknown, fallback: number, min: number, max: number): number {
@@ -138,8 +124,6 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   godMode: false,
   dmgMult: 1,
   fireRateMult: 1,
-  xpLevelBase: DEFAULT_XP_LEVEL_BASE,
-  xpLevelGrowth: DEFAULT_XP_LEVEL_GROWTH,
   waterFlowRate: 1,
 
   entityShadowsDisable: false,
@@ -198,8 +182,6 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
     godMode: !!merged.godMode,
     dmgMult: Math.max(0, Number.isFinite(Number(merged.dmgMult)) ? Number(merged.dmgMult) : 1),
     fireRateMult: Math.max(0, Number.isFinite(Number(merged.fireRateMult)) ? Number(merged.fireRateMult) : 1),
-    xpLevelBase: normalizeXpLevelBase(merged.xpLevelBase),
-    xpLevelGrowth: normalizeXpLevelGrowth(merged.xpLevelGrowth),
     waterFlowRate: Math.max(0, Number.isFinite(Number(merged.waterFlowRate)) ? Number(merged.waterFlowRate) : 1),
 
     entityShadowsDisable: !!merged.entityShadowsDisable,

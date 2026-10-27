@@ -1,11 +1,11 @@
 // @system   progression/objectives/rewards
-// @owns     drains run events into claim keys, immediate gold grants, and queued reward tickets
+// @owns     drains run events into claim keys, immediate reward-outcome gold grants, and queued reward tickets
 // @doc      docs/canonical/progression_objectives_rewards.md
 // @agents   no run-event capture, reward UI opening, or option application; see rewardRunEventProducerSystem.ts, rewardPresenterSystem.ts, and progression/rewards/*
 
 import type { World } from "../../../engine/world/world";
 import { addGold } from "../../economy/gold";
-import { OBJECTIVE_COMPLETION_GOLD, type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";
+import { type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";
 import type { ProgressionRewardFamily } from "../../progression/rewards/rewardFamilies";
 import { type RunEvent, shiftRunEvent } from "../../rewards/runEvents";
 import {
@@ -33,8 +33,6 @@ function claimKeyForRunEvent(world: World, ev: RunEvent): string {
     case "OBJECTIVE_COMPLETED":
       if (world.floorRewardBudget.mode === "ZONE_TRIAL") return `${floorIndex}:TRIAL_COMPLETE`;
       return `${floorIndex}:OBJ_COMPLETE:${ev.objectiveId}`;
-    case "LEVEL_UP":
-      return `${floorIndex}:LEVEL_UP:${ev.level}`;
     case "CHEST_OPEN_REQUESTED":
       return ev.chestKind === "BOSS"
         ? `${floorIndex}:BOSS_CHEST`
@@ -60,7 +58,6 @@ function rewardPlanForRunEvent(
   outcome: RewardOutcome;
   ticketSource: RewardTicketSource;
   progressionFamily?: ProgressionRewardFamily;
-  bonusGoldAmount: number;
 } {
   const depth = floorMapDepthForRewards(world);
 
@@ -73,14 +70,12 @@ function rewardPlanForRunEvent(
           { depth },
         ),
         ticketSource: "FLOOR_COMPLETION",
-        bonusGoldAmount: 0,
       };
 
     case "RARE_MILESTONE_CLEARED":
       return {
         outcome: applyRareMilestoneReward(world, ev.rareIndex),
         ticketSource: "FLOOR_COMPLETION",
-        bonusGoldAmount: 0,
       };
 
     case "SURVIVE_MILESTONE":
@@ -91,7 +86,6 @@ function rewardPlanForRunEvent(
           { depth },
         ),
         ticketSource: "FLOOR_COMPLETION",
-        bonusGoldAmount: 0,
       };
 
     case "OBJECTIVE_COMPLETED":
@@ -99,14 +93,6 @@ function rewardPlanForRunEvent(
         outcome: handleRewardEvent(world.floorRewardBudget, { type: "OBJECTIVE_COMPLETED" }, { depth }),
         ticketSource: "FLOOR_COMPLETION",
         progressionFamily: world.currentFloorIntent?.rewardFamily ?? "RING",
-        bonusGoldAmount: OBJECTIVE_COMPLETION_GOLD,
-      };
-
-    case "LEVEL_UP":
-      return {
-        outcome: { type: "NO_REWARD", reason: `Level ${ev.level} grants no progression reward` },
-        ticketSource: "LEVEL_UP",
-        bonusGoldAmount: 0,
       };
 
     case "CHEST_OPEN_REQUESTED":
@@ -117,14 +103,12 @@ function rewardPlanForRunEvent(
           { depth },
         ),
         ticketSource: ev.chestKind === "BOSS" ? "BOSS_CHEST" : "SIDE_OBJECTIVE",
-        bonusGoldAmount: 0,
       };
 
     default:
       return {
         outcome: { type: "NO_REWARD", reason: "Unhandled run event" },
         ticketSource: "FLOOR_COMPLETION",
-        bonusGoldAmount: 0,
       };
   }
 }
@@ -163,10 +147,6 @@ export function rewardSchedulerSystem(world: World): void {
     }
     if (ev.type === "ZONE_CLEARED" || ev.type === "RARE_MILESTONE_CLEARED") {
       appendZoneRewardClaim(world, claimKey);
-    }
-
-    if (plan.bonusGoldAmount > 0) {
-      addGold(world, plan.bonusGoldAmount);
     }
 
     if (plan.outcome.type === "GRANT_GOLD") {

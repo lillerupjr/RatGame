@@ -563,7 +563,7 @@ html.ios-standalone-fix #ui {
   line-height: 1.2;
 }
 
-#lvlPill {
+#goldPill {
   grid-column: 2;
   grid-row: 2;
   font-size: var(--hud-primary-size);
@@ -3933,7 +3933,7 @@ html.ios-standalone-fix #ui {
   }
 
   #timePill,
-  #lvlPill {
+  #goldPill {
     font-size: var(--hud-primary-size);
   }
 
@@ -4130,7 +4130,7 @@ html.ios-standalone-fix #ui {
   }
 
   #timePill,
-  #lvlPill {
+  #goldPill {
     font-size: clamp(11px, 1.45vw, 13px);
   }
 

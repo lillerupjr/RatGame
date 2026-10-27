@@ -24,7 +24,7 @@ Own the `world.state === "RUN"` gameplay execution path: input, time scaling, mo
 
 - Enemy brain/action and hostile spawn planning: `docs/canonical/hostile_ai_spawn_runtime.md`
 - Boss orchestration/phase state beyond executing spawned projectiles/zones/hazards: `docs/canonical/boss_encounter_system.md`
-- Objective/reward/outcome transitions and drop/gold/xp grant: `docs/canonical/progression_objectives_rewards.md`
+- Objective/reward/outcome transitions and drop/gold grant: `docs/canonical/progression_objectives_rewards.md`
 - Combat stat authoring, modifiers, ailment rules: `docs/canonical/combat_mods_stat_resolution_loadout_effects.md`
 - Audio/VFX/floating-text/UI consumption of sim events: `docs/canonical/ui_shell_menus_runtime_panels.md`
 
@@ -85,7 +85,7 @@ Own the `world.state === "RUN"` gameplay execution path: input, time scaling, mo
 - Projectile death routes through `despawnProjectile(...)`.
 - Kill finalization routes through `finalizeEnemyDeath(...)`.
 - `world.events` is frame-wide and clears only after downstream consumers; `world.eventQueue` is a separate momentum queue cleared by `processMomentumEventQueue(...)`.
-- `pickupsSystem(...)` moves pickups but does not grant gold/xp or perform physical collection.
+- `pickupsSystem(...)` moves pickups but does not grant gold or perform physical collection.
 
 ## Constraints
 
@@ -147,7 +147,7 @@ Poison trail zones use `ZONE_KIND.POISON` (value 6) and do not deal direct zone 
 - Manual projectile despawn skips `despawnProjectile(...)` VFX.
 - World-space movement without anchor sync causes render/sim drift.
 - Missing Z overlap creates cross-floor/cross-height hits.
-- Treating `pickupsSystem(...)` as gold/xp collection authority is wrong.
+- Treating `pickupsSystem(...)` as gold collection authority is wrong.
 - Early `world.events` clearing drops audio, combat text, and progression consumers.
 
 ## Verification

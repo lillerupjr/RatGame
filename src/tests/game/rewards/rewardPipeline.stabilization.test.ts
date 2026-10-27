@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { EnemyId } from "../../../game/factories/enemyFactory";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
-import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
 import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
@@ -75,7 +74,7 @@ describe("reward pipeline stabilization", () => {
     expect(world.floorRewardBudget.nonObjectiveRewardsRemaining).toBe(0);
   });
 
-  test("zone trial sequence is objective progression plus gold only", () => {
+  test("zone trial sequence is objective progression only", () => {
     const world = createRewardPipelineWorld(84, "ZONE_TRIAL");
     world.runEvents.push(
       { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
@@ -96,7 +95,7 @@ describe("reward pipeline stabilization", () => {
     }
 
     expect(families).toEqual(["RING"]);
-    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(world.run.runGold).toBe(0);
     expect(rewardPresenterSystem(world)).toBe(false);
   });
 });

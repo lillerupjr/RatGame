@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { createFloorRewardBudget } from "../../rewards/floorRewardBudget";
-import { OBJECTIVE_COMPLETION_GOLD } from "../../rewards/rewardDirector";
 import { rewardRunEventProducerSystem } from "../../systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "../../systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "../../systems/progression/rewardPresenterSystem";
@@ -23,8 +22,7 @@ function createWorld(seed = 123): any {
     floorArchetype: "TIME_TRIAL",
     floorIndex: 0,
     timeSec: 0,
-    run: { runGold: 0, xp: 0, level: 1, xpToNextLevel: 50 },
-    level: 1,
+    run: { runGold: 0 },
     objectiveStates: [{ id: "OBJ_ZONE_TRIAL", status: "COMPLETED" }],
     floorRewardBudget: createFloorRewardBudget("ZONE_TRIAL"),
     objectiveRewardClaimedKey: null,
@@ -47,7 +45,7 @@ function canAdvance(world: any): boolean {
 }
 
 describe("zoneTrial reward trigger", () => {
-  test("grants objective gold plus progression reward exactly once and blocks advancement until resolved", () => {
+  test("grants a progression reward exactly once (no objective gold) and blocks advancement until resolved", () => {
     const world = createWorld(7);
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
@@ -56,7 +54,7 @@ describe("zoneTrial reward trigger", () => {
 
     expect(startedFirst).toBe(true);
     expect(world.progressionReward.active).toBe(true);
-    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(world.run.runGold).toBe(0);
     expect(canAdvance(world)).toBe(false);
 
     resolveActiveRewardTicket(world);
@@ -67,7 +65,7 @@ describe("zoneTrial reward trigger", () => {
     rewardSchedulerSystem(world);
     const startedSecond = rewardPresenterSystem(world);
     expect(startedSecond).toBe(false);
-    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(world.run.runGold).toBe(0);
     expect(canAdvance(world)).toBe(true);
   });
 
@@ -80,7 +78,7 @@ describe("zoneTrial reward trigger", () => {
     expect(started).toBe(true);
     expect(world.progressionReward.active).toBe(true);
     expect(world.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
-    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(world.run.runGold).toBe(0);
     expect(canAdvance(world)).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 // @system   progression/objectives/rewards
-// @owns     converts kill events into gold/xp pickup drops and handles physical pickup collection side effects
+// @owns     converts kill events into gold pickup drops and handles physical pickup collection side effects
 // @doc      docs/canonical/progression_objectives_rewards.md
 // @agents   no pickup vacuum motion, reward ticket scheduling, or combat kill finalization; see pickups.ts, rewardSchedulerSystem.ts, and enemies/finalize.ts
 
@@ -7,7 +7,7 @@ import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getBossDefinitionForEntity, isBossEntity } from "../../bosses/bossRuntime";
 import { goldValueFromEnemyBaseLife } from "../../economy/coins";
-import { grantXp } from "../../economy/xp";
+import { addGold } from "../../economy/gold";
 import { spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
 import { registry } from "../../content/registry";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
@@ -21,7 +21,7 @@ import {
 export function dropsSystem(w: World, dt: number) {
   tickLootGoblinGoldBurst(w, dt);
 
-  // 1) Spawn XP pickups (reusing gold orb visuals) from kill events.
+  // 1) Spawn gold pickups from kill events.
   for (let i = 0; i < w.events.length; i++) {
     const e = w.events[i];
     if (e.type !== "ENEMY_KILLED") continue;
@@ -67,7 +67,7 @@ export function dropsSystem(w: World, dt: number) {
     if (kind === PICKUP_KIND.GOLD) {
       w.xAlive[i] = false;
       const stored = Number.isFinite(w.xValue[i]) ? Math.floor(w.xValue[i]) : 1;
-      grantXp(w, Math.max(0, stored));
+      addGold(w, Math.max(0, stored));
       continue;
     }
 

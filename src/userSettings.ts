@@ -100,8 +100,6 @@ export type GameSettings = {
   userModeEnabled: boolean;
   healthOrbSide: "left" | "right";
   gameSpeed: number;
-  xpLevelBase: number;
-  xpLevelGrowth: number;
 };
 
 export type AudioPreferenceSettings = {
@@ -250,8 +248,6 @@ function toLegacySettings(): UserSettings {
       userModeEnabled: settings.user.game.userModeEnabled,
       healthOrbSide: settings.user.game.healthOrbSide,
       gameSpeed: settings.system.gameSpeed,
-      xpLevelBase: settings.system.xpLevelBase,
-      xpLevelGrowth: settings.system.xpLevelGrowth,
     },
     render: {
       renderBackend: settings.debug.renderBackend,
@@ -309,12 +305,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (gamePatch.gameSpeed !== undefined) {
       systemPatch.gameSpeed = gamePatch.gameSpeed;
-    }
-    if (gamePatch.xpLevelBase !== undefined) {
-      systemPatch.xpLevelBase = gamePatch.xpLevelBase;
-    }
-    if (gamePatch.xpLevelGrowth !== undefined) {
-      systemPatch.xpLevelGrowth = gamePatch.xpLevelGrowth;
     }
   }
 

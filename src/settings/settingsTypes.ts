@@ -94,8 +94,6 @@ export type SystemOverrides = {
   godMode: boolean;
   dmgMult: number;
   fireRateMult: number;
-  xpLevelBase: number;
-  xpLevelGrowth: number;
   waterFlowRate: number;
 
   entityShadowsDisable: boolean;

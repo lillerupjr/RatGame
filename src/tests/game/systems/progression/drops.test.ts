@@ -12,7 +12,6 @@ import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
 import { spawnBossEncounter } from "../../../../game/bosses/spawnBossEncounter";
 import { BossId } from "../../../../game/bosses/bossTypes";
-import { getSettings } from "../../../../settings/settingsStore";
 
 describe("dropsSystem", () => {
   test("enemy kill spawns exactly one gold pickup using enemy base life (not scaled hp)", () => {
@@ -70,48 +69,16 @@ describe("dropsSystem", () => {
     expect(chestCount).toBe(0);
   });
 
-  test("collecting combat pickup grants its stored value as xp", () => {
+  test("collecting combat pickup grants its stored value as gold", () => {
     const w = createWorld({ seed: 2, stage: stageDocks });
     const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
 
     spawnGold(w, pw.wx, pw.wy, 7);
     dropsSystem(w, 1 / 60);
 
-    expect(w.run.xp).toBe(7);
-    expect(w.run.runGold).toBe(0);
-    expect(w.run.level).toBe(1);
+    expect(w.run.runGold).toBe(7);
+    expect(w.runEvents).toEqual([]);
     expect(w.xAlive.some(Boolean)).toBe(false);
-  });
-
-  test("large xp pickup can trigger multiple level-up rewards", () => {
-    const w = createWorld({ seed: 12, stage: stageDocks });
-    const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
-    const startingLevel = w.run.level;
-    const xpGrowth = Math.max(1, getSettings().system.xpLevelGrowth);
-    let expectedXp = 120;
-    let expectedLevel = startingLevel;
-    let expectedXpToNext = w.run.xpToNextLevel;
-    const expectedRunEvents: Array<{ type: "LEVEL_UP"; floorIndex: number; level: number }> = [];
-
-    while (expectedXp >= expectedXpToNext) {
-      expectedXp -= expectedXpToNext;
-      expectedLevel += 1;
-      expectedXpToNext = Math.max(1, Math.ceil(expectedXpToNext * xpGrowth));
-      expectedRunEvents.push({
-        type: "LEVEL_UP",
-        floorIndex: 0,
-        level: expectedLevel,
-      });
-    }
-
-    spawnGold(w, pw.wx, pw.wy, 120);
-    dropsSystem(w, 1 / 60);
-
-    expect(w.run.xp).toBe(expectedXp);
-    expect(w.run.level).toBe(expectedLevel);
-    expect(w.run.xpToNextLevel).toBe(expectedXpToNext);
-    expect(w.level).toBe(expectedLevel);
-    expect(w.runEvents).toEqual(expectedRunEvents);
   });
 
   test("loot goblin kill emits delayed 300x1g drops and skips normal kill drops", () => {
